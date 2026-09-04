@@ -1,0 +1,1 @@
+{"name":"gelbooru-prompt-nodejs","version":"1.0.0","private":true,"description":"Веб-приложение Node.js для работы с постами Gelbooru, обработки тегов и локальной истории изображений и анимаций.","main":"server.js","scripts":{"start":"node server.js"},"engines":{"node":">=18"},"dependencies":{"https-proxy-agent":"^7.0.6","sharp":"^0.33.5","sqlite3":"^5.1.7"}}
