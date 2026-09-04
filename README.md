@@ -126,3 +126,12 @@ API-ключ, ID пользователя и параметры прокси з�
 - `data/`;
 - `.env` и другие файлы с секретами;
 - API-ключи и пароли.
+
+
+## Русский интерфейс
+<img width="921" height="1079" alt="1" src="https://github.com/user-attachments/assets/b5fb6aca-a870-4c9a-9a99-ab9058105ed9" />
+
+## English interface
+<img width="918" height="1079" alt="2" src="https://github.com/user-attachments/assets/4dd17281-3b7e-4223-b56d-3771ad90530e" />
+
+
