@@ -3,198 +3,2447 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#06060d">
     <title>Gelbooru Prompt</title>
     <link rel="icon" href="/favicon.ico" type="image/png">
     <style>
+        :root {
+            --bg: #06060d;
+            --surface: rgba(22, 22, 34, 0.72);
+            --surface-2: rgba(30, 30, 46, 0.55);
+            --surface-3: rgba(12, 12, 22, 0.85);
+            --surface-inset: rgba(8, 8, 16, 0.6);
+            --border: rgba(255, 255, 255, 0.07);
+            --border-hover: rgba(255, 255, 255, 0.16);
+            --text: #f0f1f7;
+            --text-dim: #a2a8bd;
+            --text-mute: #676d84;
+            --accent: #ff2e63;
+            --accent-2: #ff8a3d;
+            --accent-3: #7c3aed;
+            --grad: linear-gradient(135deg, #ff2e63 0%, #ff8a3d 100%);
+            --grad-violet: linear-gradient(135deg, #7c3aed 0%, #ff2e63 100%);
+            --grad-soft: linear-gradient(135deg, rgba(255, 46, 99, 0.12), rgba(255, 138, 61, 0.12));
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55);
+            --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.3);
+            --glow: 0 8px 28px rgba(255, 46, 99, 0.35);
+            --glow-soft: 0 0 0 4px rgba(255, 46, 99, 0.15);
+            --radius: 14px;
+            --radius-sm: 10px;
+            --radius-lg: 20px;
+            --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; min-height: 100vh; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; }
-        .container { max-width: 900px; width: 100%; flex: 1; }
-        h1 { text-align: center; margin-bottom: 20px; color: #e94560; }
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; flex-wrap: wrap; }
-        .tab { padding: 8px 20px; cursor: pointer; background: #2a2a4a; border-radius: 6px 6px 0 0; transition: 0.3s; font-weight: bold; user-select: none; -webkit-user-select: none; }
-        .tab.active { background: #e94560; color: #fff; }
-        .tab:hover { background: #3a3a5a; }
-        .tab-content { display: none; background: #16213e; padding: 20px; border-radius: 0 8px 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: content-box;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); background-clip: content-box; }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(1000px 620px at 8% -8%, rgba(255, 46, 99, 0.16), transparent 55%),
+                radial-gradient(900px 700px at 102% 108%, rgba(124, 58, 237, 0.18), transparent 55%),
+                radial-gradient(700px 700px at 50% 40%, rgba(255, 138, 61, 0.05), transparent 70%);
+            background-attachment: fixed;
+            color: var(--text);
+            padding: 28px 20px 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 940px;
+            width: 100%;
+            flex: 1;
+        }
+
+        /* ============ HEADER ============ */
+        .app-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding: 0 4px;
+        }
+        .logo-badge {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            font-size: 28px;
+            background: var(--grad);
+            box-shadow: var(--glow);
+            position: relative;
+            flex-shrink: 0;
+            animation: badgePulse 6s ease-in-out infinite;
+        }
+        .logo-badge::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 17px;
+            background: var(--grad);
+            filter: blur(16px);
+            opacity: 0.5;
+            z-index: -1;
+        }
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+        .header-text h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #ffffff 0%, #c8cce0 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-text .subtitle {
+            font-size: 13px;
+            color: var(--text-mute);
+            margin-top: 2px;
+            letter-spacing: 0.01em;
+        }
+
+        /* ============ TABS ============ */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 22px;
+            padding: 5px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: var(--shadow-sm);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .tabs::-webkit-scrollbar { display: none; }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            border-radius: 10px;
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.25s var(--ease);
+            user-select: none;
+            -webkit-user-select: none;
+            white-space: nowrap;
+            position: relative;
+        }
+        .tab svg {
+            width: 17px;
+            height: 17px;
+            flex-shrink: 0;
+            transition: transform 0.25s var(--ease);
+        }
+        .tab:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .tab:hover svg { transform: scale(1.1); }
+        .tab.active {
+            background: var(--grad);
+            color: #fff;
+            box-shadow: var(--glow);
+        }
+        .tab.active svg { transform: scale(1.05); }
+
+        /* ============ TAB CONTENT ============ */
+        .tab-content {
+            display: none;
+            animation: fadeSlide 0.35s var(--ease);
+        }
         .tab-content.active { display: block; }
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* ============ FORM ============ */
         .form-group { margin-bottom: 16px; }
-        label { display: block; margin-bottom: 4px; font-weight: 500; color: #aaa; }
-        textarea, input, select { width: 100%; padding: 10px 12px; background: #0f0f23; border: 1px solid #333; color: #eee; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; }
-        textarea:focus, input:focus, select:focus { border-color: #e94560; outline: none; }
-        textarea { min-height: 40px; }
-        button { padding: 10px 24px; background: #e94560; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px; user-select: none; -webkit-user-select: none; }
-        button:hover { background: #c73652; }
-        button.secondary { background: #444; }
-        button.secondary:hover { background: #555; }
-        button:disabled { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
-        .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        .result-box { margin-top: 20px; padding: 16px; background: #0f0f23; border-radius: 6px; border-left: 4px solid #e94560; word-break: break-all; }
-        .result-box .tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .result-box .tags-header span { color: #aaa; font-size: 14px; }
-        .result-box .tags-header button { padding: 4px 12px; font-size: 12px; background: #2a2a4a; border: 1px solid #555; border-radius: 4px; cursor: pointer; color: #ddd; transition: 0.3s; min-width: 80px; user-select: none; -webkit-user-select: none; }
-        .result-box .tags-header button:hover { background: #3a3a5a; }
-        .result-box .tags-content { background: #0d0d1a; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.6; color: #e0e0e0; white-space: pre-wrap; word-break: break-all; border: 1px solid #2a2a4a; max-height: 300px; overflow-y: auto; }
-        .result-box .url { margin-top: 8px; color: #5b9bd5; font-size: 14px; }
-        .preview { margin-top: 16px; max-width: 100%; border-radius: 6px; border: 1px solid #333; background: #0f0f23; display: flex; justify-content: center; align-items: center; min-height: 200px; position: relative; }
-        .preview img, .preview video { max-width: 100%; max-height: 500px; border-radius: 4px; display: block; }
+        .form-group:last-child { margin-bottom: 0; }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--text-dim);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        textarea, input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 12px 14px;
+            background: var(--surface-inset);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s var(--ease);
+            outline: none;
+        }
+        textarea::placeholder, input::placeholder { color: var(--text-mute); }
+        textarea:hover, input[type="text"]:hover, input[type="password"]:hover, select:hover {
+            border-color: var(--border-hover);
+        }
+        textarea:focus, input[type="text"]:focus, input[type="password"]:focus, select:focus {
+            border-color: var(--accent);
+            background: rgba(12, 12, 22, 0.85);
+            box-shadow: var(--glow-soft);
+        }
+        textarea { min-height: 44px; resize: vertical; line-height: 1.5; }
+
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a2a8bd' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 40px;
+            cursor: pointer;
+        }
+
+        /* ============ BUTTONS ============ */
+        button {
+            padding: 11px 22px;
+            background: var(--grad);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-weight: 700;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.22s var(--ease);
+            user-select: none;
+            -webkit-user-select: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(255, 46, 99, 0.28);
+            position: relative;
+            overflow: hidden;
+        }
+        button::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.22), transparent 55%);
+            opacity: 0;
+            transition: opacity 0.22s var(--ease);
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 22px rgba(255, 46, 99, 0.42);
+        }
+        button:hover::before { opacity: 1; }
+        button:active { transform: translateY(0); }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+        button.secondary:hover {
+            background: rgba(255, 255, 255, 0.09);
+            border-color: var(--border-hover);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+        button.secondary::before { display: none; }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+            pointer-events: none;
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 18px;
+        }
+
+        /* ============ RESULT BOX ============ */
+        .result-box {
+            margin-top: 18px;
+            padding: 18px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            position: relative;
+            overflow: hidden;
+        }
+        .result-box::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; bottom: 0;
+            width: 3px;
+            background: var(--grad);
+        }
+
+        .tags-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+        .tags-header > span {
+            color: var(--text-dim);
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .tags-header button {
+            padding: 7px 14px;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            box-shadow: none;
+            font-weight: 600;
+            min-width: 100px;
+        }
+        .tags-header button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--border-hover);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        .tags-header button::before { display: none; }
+
+        .tags-content {
+            background: var(--surface-inset);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            font-family: 'SF Mono', 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: #dfe3f0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid var(--border);
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .url {
+            margin-top: 10px;
+            color: #7fb2ff;
+            font-size: 13px;
+            word-break: break-all;
+            transition: color 0.2s var(--ease);
+        }
+        .url:not(:empty) {
+            padding: 8px 12px;
+            background: rgba(127, 178, 255, 0.06);
+            border: 1px solid rgba(127, 178, 255, 0.12);
+            border-radius: 8px;
+        }
+        .url:hover { color: #a5c8ff; }
+
+        .preview {
+            margin-top: 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface-inset);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 240px;
+            position: relative;
+            overflow: hidden;
+        }
+        .preview img, .preview video {
+            max-width: 100%;
+            max-height: 520px;
+            border-radius: 8px;
+            transition: opacity 0.3s var(--ease);
+            display: block;
+        }
         .preview img { cursor: zoom-in; }
         .preview video { cursor: default; }
-        .preview img:hover, .preview video:hover { opacity: 0.9; }
-        .modal { width: min(420px, 90vw); background: #16213e; border-radius: 12px; padding: 20px; box-shadow: 0 12px 50px rgba(0,0,0,0.5); }
-        .modal h2 { margin-bottom: 14px; }
-        .modal input { margin-bottom: 10px; }
-        .modal-error { color: #ff6b6b; min-height: 20px; }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
-        .preview .spinner { width: 60px; height: 60px; border-radius: 50%; background: conic-gradient(from 0deg, #e94560, #ff6b6b, #e94560); animation: spin 1.2s linear infinite; box-shadow: 0 0 30px rgba(233, 69, 96, 0.3); position: relative; }
-        .preview .spinner::after { content: ''; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px; border-radius: 50%; background: #0f0f23; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .status { margin-top: 10px; color: #ffaa66; font-style: italic; }
-        .settings-group { margin-top: 20px; }
-        .settings-group h3 { color: #e94560; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 6px; }
-        .checkbox-group { display: flex; align-items: center; gap: 8px; }
-        .checkbox-group input[type="checkbox"] { width: 20px; height: 20px; accent-color: #e94560; }
-        .checkbox-group label { margin: 0; color: #eee; cursor: pointer; }
-        .save-btn { margin-top: 20px; width: 100%; }
-        .error { color: #ff6b6b; margin-top: 8px; }
-        .success { color: #51cf66; margin-top: 8px; }
-        .footer { margin-top: 40px; padding: 15px 0; text-align: center; border-top: 1px solid #333; color: #888; font-size: 14px; width: 100%; max-width: 900px; }
-        @media (max-width: 600px) { .tabs { flex-direction: column; } }
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .preview img:hover, .preview video:hover { opacity: 0.92; }
+
+        .status {
+            margin-top: 12px;
+            font-style: italic;
+            font-size: 13.5px;
+            min-height: 20px;
+            transition: color 0.2s var(--ease);
+        }
+
+        hr {
+            margin: 30px 0;
+            border: none;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+
+        /* ============ SPINNER ============ */
+        .spinner {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, var(--accent), var(--accent-2), var(--accent-3), var(--accent));
+            animation: spin 1.1s linear infinite;
+            box-shadow: 0 0 40px rgba(255, 46, 99, 0.35);
+            position: relative;
+        }
+        .spinner::after {
+            content: '';
+            position: absolute;
+            top: 5px; left: 5px; right: 5px; bottom: 5px;
+            border-radius: 50%;
+            background: var(--surface-inset);
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ============ SETTINGS ============ */
+        .settings-group {
+            margin-top: 22px;
+            padding: 18px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+        .settings-group:first-child { margin-top: 0; }
+
+        .settings-group h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text);
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .settings-group h3 svg {
+            width: 18px;
+            height: 18px;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: var(--surface-inset);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s var(--ease);
+        }
+        .checkbox-group:hover { border-color: var(--border-hover); }
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--accent);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .checkbox-group label {
+            margin: 0;
+            color: var(--text);
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 500;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .settings-group small, small.hint {
+            display: block;
+            margin-top: 6px;
+            color: var(--text-mute);
+            font-size: 12.5px;
+            line-height: 1.5;
+        }
+        .settings-group small a, small.hint a {
+            color: #7fb2ff;
+            text-decoration: none;
+            border-bottom: 1px dashed rgba(127, 178, 255, 0.4);
+            transition: color 0.2s var(--ease);
+        }
+        .settings-group small a:hover, small.hint a:hover { color: #a5c8ff; }
+
+        .save-btn {
+            margin-top: 22px;
+            width: 100%;
+            padding: 14px;
+            font-size: 15px;
+        }
+
+        /* ============ FOOTER ============ */
+        .footer {
+            margin-top: 40px;
+            padding: 18px 0 24px;
+            text-align: center;
+            color: var(--text-mute);
+            font-size: 13px;
+            width: 100%;
+            max-width: 940px;
+        }
+        .footer::before {
+            content: '';
+            display: block;
+            height: 1px;
+            margin-bottom: 18px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+
+        /* ============ HISTORY ============ */
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .history-header > span {
+            color: var(--text-dim);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .history-item {
+            background: var(--surface-2);
+            border-radius: var(--radius);
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.25s var(--ease);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .history-item:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255, 46, 99, 0.5);
+            box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4), 0 0 24px rgba(255, 46, 99, 0.12);
+        }
+        .history-item img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            display: block;
+            background: var(--surface-inset);
+        }
+        .history-item .history-tags {
+            padding: 8px 10px;
+            font-size: 11px;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            background: var(--surface-3);
+            flex-shrink: 0;
+            letter-spacing: 0.01em;
+        }
+        .history-empty {
+            color: var(--text-mute);
+            text-align: center;
+            padding: 60px 0;
+            grid-column: 1 / -1;
+            font-size: 14px;
+        }
+        .history-pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-top: 22px;
+            flex-wrap: wrap;
+        }
+        .history-pagination button {
+            padding: 8px 18px;
+            font-size: 13px;
+        }
+        .history-pagination span {
+            color: var(--text-dim);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* ============ MODALS ============ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(4, 4, 10, 0.75);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 20px;
+            animation: fadeIn 0.2s var(--ease);
+        }
         .modal-overlay.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         #imageModal { z-index: 3000; }
         #imageModalWrapper { position: relative; z-index: 1; }
         #historyDetailModal { z-index: 2000; }
-        .modal-content { position: relative; width: 92vw; height: 92vh; max-width: 1600px; max-height: 92vh; overflow: hidden; background: transparent; border-radius: 12px; touch-action: none; }
-        .modal-content .zoom-info { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 14px; pointer-events: none; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.1); }
-        .modal-image-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 56px 24px 48px; overflow: hidden; touch-action: none; }
-        .modal-image-wrapper img { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: none; will-change: transform; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); cursor: grab; user-select: none; }
+
+        .modal {
+            width: min(420px, 100%);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 26px;
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            animation: modalIn 0.28s var(--ease);
+        }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.96) translateY(8px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal h2 {
+            margin-bottom: 16px;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .modal input { margin-bottom: 12px; }
+        .modal-error {
+            color: #ff6b8a;
+            min-height: 20px;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        /* ============ IMAGE MODAL ============ */
+        .modal-content {
+            position: relative;
+            width: 92vw;
+            height: 92vh;
+            max-width: 1600px;
+            max-height: 92vh;
+            overflow: hidden;
+            background: transparent;
+            border-radius: var(--radius-lg);
+            touch-action: none;
+        }
+        .zoom-info {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 22px;
+            font-size: 13px;
+            font-weight: 600;
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            letter-spacing: 0.02em;
+        }
+        .modal-image-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 56px 24px 48px;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .modal-image-wrapper img {
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transform-origin: center center;
+            transition: none;
+            will-change: transform;
+            border-radius: 12px;
+            box-shadow: 0 12px 60px rgba(0, 0, 0, 0.7);
+            cursor: grab;
+            user-select: none;
+        }
         .modal-image-wrapper img:active { cursor: grabbing; }
-        .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 16px; }
-        .history-item { background: #0f0f23; border-radius: 6px; overflow: hidden; cursor: pointer; transition: transform 0.2s; border: 1px solid #2a2a4a; display: flex; flex-direction: column; }
-        .history-item:hover { transform: scale(1.03); border-color: #e94560; }
-        .history-item img { width: 100%; height: 120px; object-fit: cover; display: block; }
-        .history-item .history-tags { padding: 4px 6px; font-size: 11px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #0d0d1a; flex-shrink: 0; }
-        .history-empty { color: #888; text-align: center; padding: 40px 0; }
-        .history-pagination { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
-        .history-pagination button { padding: 6px 16px; font-size: 13px; }
-        .history-pagination span { color: #aaa; font-size: 14px; }
-        .history-detail-modal .modal-content { max-width: 750px; max-height: 85vh; overflow-y: auto; background: #16213e; padding: 20px; border-radius: 12px; width: 90%; }
-        .history-detail-modal .modal-content #historyDetailImage { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 60px; }
-        .history-detail-modal .modal-content #historyDetailImage img { max-width: 100%; max-height: 350px; border-radius: 6px; object-fit: contain; display: block; cursor: zoom-in; user-select: none; }
-        .history-detail-modal .modal-content .detail-tags { margin-top: 14px; background: #0f0f23; padding: 12px; border-radius: 6px; border-left: 4px solid #e94560; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto; }
-        .history-detail-modal .modal-content .detail-url { margin-top: 8px; color: #5b9bd5; font-size: 14px; cursor: pointer; }
-        .history-detail-modal .modal-content .detail-url:hover { text-decoration: underline; }
-        .detail-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .detail-actions button { padding: 6px 16px; font-size: 13px; }
-        .detail-actions .copy-tags-btn { background: #2a2a4a; }
-        .detail-actions .copy-tags-btn:hover { background: #3a3a5a; }
-        .detail-actions .delete-btn { background: #a03030; }
-        .detail-actions .delete-btn:hover { background: #c04040; }
+
+        /* ============ HISTORY DETAIL MODAL ============ */
+        .history-detail-modal .modal-content {
+            max-width: 780px;
+            max-height: 88vh;
+            overflow-y: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 24px;
+            border-radius: var(--radius-lg);
+            width: 100%;
+            height: auto;
+            touch-action: pan-y;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: var(--shadow-lg);
+            animation: modalIn 0.28s var(--ease);
+        }
+        #historyDetailImage {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            min-height: 60px;
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: var(--surface-inset);
+            border: 1px solid var(--border);
+        }
+        #historyDetailImage:empty { display: none; }
+        #historyDetailImage img {
+            max-width: 100%;
+            max-height: 380px;
+            border-radius: var(--radius);
+            object-fit: contain;
+            display: block;
+            cursor: zoom-in;
+            user-select: none;
+        }
+        .detail-tags {
+            margin-top: 16px;
+            background: var(--surface-inset);
+            padding: 14px;
+            border-radius: var(--radius-sm);
+            border-left: 3px solid transparent;
+            border-image: var(--grad) 1;
+            font-family: 'SF Mono', 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 13.5px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+            color: #dfe3f0;
+        }
+        .detail-url {
+            margin-top: 10px;
+            color: #7fb2ff;
+            font-size: 13px;
+            cursor: pointer;
+            word-break: break-all;
+            padding: 8px 12px;
+            background: rgba(127, 178, 255, 0.06);
+            border: 1px solid rgba(127, 178, 255, 0.12);
+            border-radius: 8px;
+            transition: all 0.2s var(--ease);
+        }
+        .detail-url:hover {
+            color: #a5c8ff;
+            background: rgba(127, 178, 255, 0.1);
+        }
+        .detail-actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .detail-actions button {
+            padding: 9px 18px;
+            font-size: 13px;
+            flex: 1 1 auto;
+        }
+        .detail-actions .copy-tags-btn {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+        .detail-actions .copy-tags-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--border-hover);
+        }
+        .detail-actions .copy-tags-btn::before { display: none; }
+        .detail-actions .delete-btn {
+            background: linear-gradient(135deg, #a02040, #c73050);
+            box-shadow: 0 4px 14px rgba(160, 32, 64, 0.35);
+        }
+        .detail-actions .delete-btn:hover {
+            box-shadow: 0 8px 22px rgba(160, 32, 64, 0.5);
+        }
+
+        /* ============ RESPONSIVE ============ */
+        @media (max-width: 600px) {
+            body { padding: 18px 14px 0; }
+            .app-header { gap: 12px; margin-bottom: 22px; }
+            .logo-badge { width: 48px; height: 48px; font-size: 24px; border-radius: 14px; }
+            .header-text h1 { font-size: 21px; }
+            .header-text .subtitle { font-size: 12px; }
+            .card, .settings-group { padding: 16px; }
+            .tab { padding: 9px 14px; font-size: 13px; }
+            .tab svg { width: 15px; height: 15px; }
+            .history-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+            .history-item img { height: 110px; }
+            .modal { padding: 20px; }
+            .history-detail-modal .modal-content { padding: 18px; }
+            .detail-actions button { flex: 1 1 100%; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🎨 Gelbooru Prompt</h1>
-    <div class="tabs">
-        <div class="tab active" data-tab="main">Главная</div>
-        <div class="tab" data-tab="history">История</div>
-        <div class="tab" data-tab="settings">Настройки</div>
-    </div>
-    <div id="tab-main" class="tab-content active">
-        <div class="form-group"><label for="includeTags">Включить теги</label><textarea id="includeTags" rows="2" placeholder="например: 1girl, blue_hair, solo"></textarea></div>
-        <div class="form-group"><label for="excludeTags">Исключить теги</label><textarea id="excludeTags" rows="2" placeholder="например: nsfw, text, watermark"></textarea></div>
-        <div class="row"><button id="randomBtn">Случайный</button><button id="clearBtn" class="secondary">Очистить результат</button></div>
-        <div class="result-box" id="resultBox">
-            <div class="tags-header"><span>Теги</span><button id="copyTagsBtn">📋 Копировать</button></div>
-            <div class="tags-content" id="tagsDisplay">Теги появятся здесь</div>
-            <div class="url" id="urlDisplay"></div>
-            <div class="preview" id="previewContainer"><span style="color:#666;">Превью</span></div>
-            <div class="status" id="statusMsg"></div>
+    <header class="app-header">
+        <div class="logo-badge">🎨</div>
+        <div class="header-text">
+            <h1>Gelbooru Prompt</h1>
+            <p class="subtitle">Случайные посты и теги для промптов</p>
         </div>
-        <hr style="margin: 30px 0; border-color: #333;">
-        <div class="form-group"><label for="postIdInput">Загрузить пост по ссылке или ID</label><input type="text" id="postIdInput" placeholder="https://gelbooru.com/index.php?page=post&s=view&id=123456 или просто 123456"></div>
-        <button id="loadPostBtn">Загрузить пост</button>
-        <div class="result-box" id="manualResultBox">
-            <div class="tags-header"><span>Теги</span><button id="copyManualTagsBtn">📋 Копировать</button></div>
-            <div class="tags-content" id="manualTagsDisplay">Теги</div>
-            <div class="url" id="manualUrlDisplay"></div>
-            <div class="preview" id="manualPreviewContainer"><span style="color:#666;">Превью</span></div>
-            <div class="status" id="manualStatusMsg"></div>
+    </header>
+
+    <nav class="tabs">
+        <button class="tab active" data-tab="main" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                <circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/>
+                <circle cx="15.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/>
+                <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+            </svg>
+            <span class="tab-label">Главная</span>
+        </button>
+        <button class="tab" data-tab="history" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <polyline points="12 7 12 12 15.5 14"/>
+            </svg>
+            <span class="tab-label">История</span>
+        </button>
+        <button class="tab" data-tab="settings" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span class="tab-label">Настройки</span>
+        </button>
+    </nav>
+
+    <!-- ============ MAIN TAB ============ -->
+    <section id="tab-main" class="tab-content active">
+        <div class="card">
+            <div class="form-group">
+                <label for="includeTags">Включить теги</label>
+                <textarea id="includeTags" rows="2" placeholder="например: 1girl, blue_hair, solo"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="excludeTags">Исключить теги</label>
+                <textarea id="excludeTags" rows="2" placeholder="например: nsfw, text, watermark"></textarea>
+            </div>
+            <div class="row">
+                <button id="randomBtn" type="button">Случайный</button>
+                <button id="clearBtn" class="secondary" type="button">Очистить результат</button>
+            </div>
+
+            <div class="result-box" id="resultBox">
+                <div class="tags-header">
+                    <span>Теги</span>
+                    <button id="copyTagsBtn" type="button">📋 Копировать</button>
+                </div>
+                <div class="tags-content" id="tagsDisplay">Теги появятся здесь</div>
+                <div class="url" id="urlDisplay"></div>
+                <div class="preview" id="previewContainer">
+                    <span style="color:#666;">Превью</span>
+                </div>
+                <div class="status" id="statusMsg"></div>
+            </div>
+
+            <hr>
+
+            <div class="form-group">
+                <label for="postIdInput">Загрузить пост по ссылке или ID</label>
+                <input type="text" id="postIdInput" placeholder="https://gelbooru.com/index.php?page=post&s=view&id=123456 или просто 123456">
+            </div>
+            <div class="row" style="margin-top: 0;">
+                <button id="loadPostBtn" type="button">Загрузить пост</button>
+            </div>
+
+            <div class="result-box" id="manualResultBox">
+                <div class="tags-header">
+                    <span>Теги</span>
+                    <button id="copyManualTagsBtn" type="button">📋 Копировать</button>
+                </div>
+                <div class="tags-content" id="manualTagsDisplay">Теги</div>
+                <div class="url" id="manualUrlDisplay"></div>
+                <div class="preview" id="manualPreviewContainer">
+                    <span style="color:#666;">Превью</span>
+                </div>
+                <div class="status" id="manualStatusMsg"></div>
+            </div>
         </div>
-    </div>
-    <div id="tab-history" class="tab-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;"><span style="color:#aaa;" id="historyCountLabel">Всего: <span id="historyCount">0</span></span></div>
-        <div id="historyContainer" class="history-grid"><div class="history-empty">История пуста</div></div>
-        <div class="history-pagination" id="historyPagination"><button id="historyPrevBtn" class="secondary" disabled>Назад</button><span id="historyPageInfo">Страница 1 из 1</span><button id="historyNextBtn" class="secondary" disabled>Вперёд</button></div>
-    </div>
-    <div id="tab-settings" class="tab-content">
-        <div id="settings-content">
-            <div class="settings-group"><h3>Аккаунт Gelbooru</h3><div class="form-group"><label for="apiKey">API ключ</label><input type="text" id="apiKey" placeholder="Ваш API ключ"><small style="color:#888;">Получить <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" style="color:#5b9bd5;">в настройках аккаунта</a></small></div><div class="form-group"><label for="userId">ID пользователя</label><input type="text" id="userId" placeholder="Ваш ID пользователя"></div></div>
-            <div class="settings-group"><h3>Обработка тегов</h3><div class="form-group checkbox-group"><input type="checkbox" id="replaceUnderscores" checked><label for="replaceUnderscores">Заменять подчёркивания на пробелы при вставке</label></div><div class="form-group"><label for="exclusionList">Список исключений для замены подчёркиваний</label><textarea id="exclusionList" rows="2">0_0,(o)_(o),+_+,+_-,._.,&lt;o&gt;_&lt;o&gt;,&lt;|&gt;_&lt;|&gt;,=_=,&gt;_&lt;,3_3,6_9,&gt;_o,@_@,^_^,o_o,u_u,x_x,|_|,||_||</textarea><small style="color:#888;">Теги, в которых не нужно заменять _ на пробел, через запятую.</small></div><div class="form-group"><label for="ignoreTags">Игнорируемые теги (не показывать)</label><textarea id="ignoreTags" rows="2" placeholder="например: unfinished, roblox, ass"></textarea><small style="color:#888;">Теги будут удалены из результата (не влияют на поиск). Через запятую.</small></div></div>
-            <div class="settings-group"><h3>Прокси</h3><div class="form-group checkbox-group"><input type="checkbox" id="proxyEnabled"><label for="proxyEnabled">Включить прокси (HTTP/HTTPS)</label></div><div class="form-group"><label for="proxyUrl">URL прокси</label><input type="text" id="proxyUrl" placeholder="http://user:pass@host:port"></div></div>
-            <div class="settings-group"><h3>Интерфейс</h3><div class="form-group"><label for="languageSelect">Язык интерфейса</label><select id="languageSelect"><option value="ru">Русский</option><option value="en">English</option></select></div></div>
-            <div class="settings-group"><h3>История просмотров</h3><button id="clearSeenBtn" class="secondary" style="width:100%;">Очистить историю просмотренных (и кэш)</button><div id="clearSeenStatus" class="status"></div></div>
-            <button id="saveSettingsBtn" class="save-btn">Сохранить настройки</button><div id="settingsStatus" class="status"></div>
+    </section>
+
+    <!-- ============ HISTORY TAB ============ -->
+    <section id="tab-history" class="tab-content">
+        <div class="card">
+            <div class="history-header">
+                <span id="historyCountLabel">Всего: 0</span>
+            </div>
+            <div id="historyContainer" class="history-grid">
+                <div class="history-empty">История пуста</div>
+            </div>
+            <div class="history-pagination" id="historyPagination">
+                <button id="historyPrevBtn" class="secondary" type="button" disabled>Назад</button>
+                <span id="historyPageInfo">Страница 1 из 1</span>
+                <button id="historyNextBtn" class="secondary" type="button" disabled>Вперёд</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ SETTINGS TAB ============ -->
+    <section id="tab-settings" class="tab-content">
+        <div id="settings-content" class="card">
+            <div class="settings-group">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span class="h3-label">Аккаунт Gelbooru</span>
+                </h3>
+                <div class="form-group">
+                    <label for="apiKey">API ключ</label>
+                    <input type="text" id="apiKey" placeholder="Ваш API ключ" autocomplete="off">
+                    <small id="accountHint">Получить <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener noreferrer">в настройках аккаунта</a></small>
+                </div>
+                <div class="form-group">
+                    <label for="userId">ID пользователя</label>
+                    <input type="text" id="userId" placeholder="Ваш ID пользователя" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                        <line x1="7" y1="7" x2="7.01" y2="7"/>
+                    </svg>
+                    <span class="h3-label">Обработка тегов</span>
+                </h3>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="replaceUnderscores" checked>
+                    <label for="replaceUnderscores">Заменять подчёркивания на пробелы при вставке</label>
+                </div>
+                <div class="form-group">
+                    <label for="exclusionList">Список исключений</label>
+                    <textarea id="exclusionList" rows="2">0_0,(o)_(o),+_+,+_-,._.,<o>_<o>,<|>_<|>,=_=,>_<,3_3,6_9,>_o,@_@,^_^,o_o,u_u,x_x,|_|,||_||</textarea>
+                    <small id="exclusionHint">Теги, в которых не нужно заменять _ на пробел, через запятую.</small>
+                </div>
+                <div class="form-group">
+                    <label for="ignoreTags">Игнорируемые теги</label>
+                    <textarea id="ignoreTags" rows="2" placeholder="например: unfinished, roblox, ass"></textarea>
+                    <small id="ignoreHint">Теги будут удалены из результата (не влияют на поиск). Через запятую.</small>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                    <span class="h3-label">Прокси</span>
+                </h3>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="proxyEnabled">
+                    <label for="proxyEnabled">Включить прокси (HTTP/HTTPS)</label>
+                </div>
+                <div class="form-group">
+                    <label for="proxyUrl">URL прокси</label>
+                    <input type="text" id="proxyUrl" placeholder="http://user:pass@host:port" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                    <span class="h3-label">Интерфейс</span>
+                </h3>
+                <div class="form-group">
+                    <label for="languageSelect">Язык интерфейса</label>
+                    <select id="languageSelect">
+                        <option value="ru">Русский</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    <span class="h3-label">История просмотров</span>
+                </h3>
+                <button id="clearSeenBtn" class="secondary" style="width:100%;" type="button">Очистить историю просмотренных (и кэш)</button>
+                <div id="clearSeenStatus" class="status"></div>
+            </div>
+
+            <button id="saveSettingsBtn" class="save-btn" type="button">Сохранить настройки</button>
+            <div id="settingsStatus" class="status"></div>
+        </div>
+    </section>
+</div>
+
+<footer class="footer">
+    <span id="seenCount">Просмотрено: 0</span>
+</footer>
+
+<!-- ============ PASSWORD MODAL ============ -->
+<div class="modal-overlay" id="passwordModal">
+    <div class="modal">
+        <h2 id="passwordModalTitle">Введите пароль</h2>
+        <input type="password" id="passwordInput" placeholder="Пароль" autocomplete="current-password">
+        <div class="modal-error" id="passwordError"></div>
+        <div class="modal-actions">
+            <button class="secondary" id="passwordCancel" type="button">Отмена</button>
+            <button id="passwordSubmit" type="button">Войти</button>
         </div>
     </div>
 </div>
-<div class="footer"><span id="seenCount">Просмотрено: 0</span></div>
-<div class="modal-overlay" id="passwordModal"><div class="modal"><h2 id="passwordModalTitle">Введите пароль</h2><input type="password" id="passwordInput" placeholder="Пароль"><div class="modal-error" id="passwordError"></div><div class="modal-actions"><button class="secondary" id="passwordCancel">Отмена</button><button id="passwordSubmit">Войти</button></div></div></div>
-<div class="modal-overlay" id="imageModal"><div class="modal-content"><div class="modal-image-wrapper" id="imageModalWrapper"></div><div class="zoom-info" id="zoomInfo">50%</div></div></div>
-<div class="modal-overlay history-detail-modal" id="historyDetailModal"><div class="modal-content"><div style="margin-top: 20px;"><div id="historyDetailImage"></div><div class="detail-tags" id="historyDetailTags"></div><div class="detail-url" id="historyDetailUrl"></div><div class="detail-actions"><button class="copy-tags-btn" id="historyDetailCopyTags">📋 Копировать теги</button><button class="delete-btn" id="historyDetailDelete">🗑️ Удалить</button></div></div></div></div>
+
+<!-- ============ IMAGE ZOOM MODAL ============ -->
+<div class="modal-overlay" id="imageModal">
+    <div class="modal-content">
+        <div class="modal-image-wrapper" id="imageModalWrapper"></div>
+        <div class="zoom-info" id="zoomInfo">50%</div>
+    </div>
+</div>
+
+<!-- ============ HISTORY DETAIL MODAL ============ -->
+<div class="modal-overlay history-detail-modal" id="historyDetailModal">
+    <div class="modal-content">
+        <div id="historyDetailImage"></div>
+        <div class="detail-tags" id="historyDetailTags"></div>
+        <div class="detail-url" id="historyDetailUrl"></div>
+        <div class="detail-actions">
+            <button class="copy-tags-btn" id="historyDetailCopyTags" type="button">📋 Копировать теги</button>
+            <button class="delete-btn" id="historyDetailDelete" type="button">🗑️ Удалить</button>
+        </div>
+    </div>
+</div>
+
 <script>
-const LOCALE = {
-ru:{mainTab:'Главная',historyTab:'История',settingsTab:'Настройки',includeLabel:'Включить теги',excludeLabel:'Исключить теги',includePlaceholder:'например: 1girl, blue_hair, solo',excludePlaceholder:'например: nsfw, text, watermark',randomBtn:'Случайный',loadingBtn:'Загрузка...',clearBtn:'Очистить результат',loadBtn:'Загрузить пост',postIdPlaceholder:'https://gelbooru.com/index.php?page=post&s=view&id=123456 или просто 123456',tagsPlaceholder:'Теги появятся здесь',previewPlaceholder:'Превью',statusLoading:'Загрузка...',statusNoPost:'Пост не найден',statusAllSeen:'Все доступные посты уже просмотрены',statusError:'Ошибка',statusSuccess:'Успешно',settingsSaved:'Настройки сохранены!',settingsLoadError:'Ошибка загрузки настроек',settingsSaveError:'Ошибка сохранения настроек',apiKeyLabel:'API ключ',userIdLabel:'ID пользователя',replaceUnderscoresLabel:'Заменять подчёркивания на пробелы при вставке',exclusionListLabel:'Список исключений для замены подчёркиваний',ignoreTagsLabel:'Игнорируемые теги (не показывать)',languageLabel:'Язык интерфейса',saveBtn:'Сохранить настройки',accountSettingsLink:'в настройках аккаунта',exclusionHint:'Теги, в которых не нужно заменять _ на пробел, через запятую.',ignoreHint:'Теги будут удалены из результата (не влияют на поиск). Через запятую.',proxyEnabledLabel:'Включить прокси (HTTP/HTTPS)',proxyUrlLabel:'URL прокси',clearSeenLabel:'Очистить историю просмотренных (и кэш)',seenCountPrefix:'Просмотрено: ',copyBtn:'📋 Копировать',copiedBtn:'✅ Скопировано',passwordModalTitle:'Введите пароль',passwordPlaceholder:'Пароль',passwordCancel:'Отмена',passwordSubmit:'Войти',passwordError:'Неверный пароль',historyEmpty:'История пуста',historyCount:'Всего: ',copyTags:'📋 Копировать теги',deletePost:'🗑️ Удалить',copied:'✅ Скопировано',confirmClearHistory:'Очистить всю историю?',historyCleared:'✅ История и кэш очищены',clearError:'❌ Ошибка очистки',deleteError:'❌ Ошибка удаления',loadPostError:'Не удалось загрузить пост',noTagsToCopy:'Нет тегов для копирования',prevPage:'Назад',nextPage:'Вперёд',pageInfo:'Страница {page} из {total}'},
-en:{mainTab:'Main',historyTab:'History',settingsTab:'Settings',includeLabel:'Include tags',excludeLabel:'Exclude tags',includePlaceholder:'e.g. 1girl, blue_hair, solo',excludePlaceholder:'e.g. nsfw, text, watermark',randomBtn:'Random',loadingBtn:'Loading...',clearBtn:'Clear result',loadBtn:'Load Post',postIdPlaceholder:'https://gelbooru.com/index.php?page=post&s=view&id=123456 or just 123456',tagsPlaceholder:'Tags will appear here',previewPlaceholder:'Preview',statusLoading:'Loading...',statusNoPost:'Post not found',statusAllSeen:'All available posts have been seen',statusError:'Error',statusSuccess:'Success',settingsSaved:'Settings saved!',settingsLoadError:'Failed to load settings',settingsSaveError:'Failed to save settings',apiKeyLabel:'API key',userIdLabel:'User ID',replaceUnderscoresLabel:'Replace underscores with spaces when inserting',exclusionListLabel:'Underscore replacement exclusions',ignoreTagsLabel:'Ignored tags (do not show)',languageLabel:'Interface language',saveBtn:'Save settings',accountSettingsLink:'in account settings',exclusionHint:'Tags that should keep _ unchanged, separated by commas.',ignoreHint:'Tags will be removed from the result and do not affect search. Comma separated.',proxyEnabledLabel:'Enable proxy (HTTP/HTTPS)',proxyUrlLabel:'Proxy URL',clearSeenLabel:'Clear seen history (and cache)',seenCountPrefix:'Seen: ',copyBtn:'📋 Copy',copiedBtn:'✅ Copied',passwordModalTitle:'Enter password',passwordPlaceholder:'Password',passwordCancel:'Cancel',passwordSubmit:'Login',passwordError:'Invalid password',historyEmpty:'History is empty',historyCount:'Total: ',copyTags:'📋 Copy tags',deletePost:'🗑️ Delete',copied:'✅ Copied',confirmClearHistory:'Clear all history?',historyCleared:'✅ History and cache cleared',clearError:'❌ Clear error',deleteError:'❌ Delete error',loadPostError:'Failed to load post',noTagsToCopy:'No tags to copy',prevPage:'Previous',nextPage:'Next',pageInfo:'Page {page} of {total}'}}
-;
-let config={replace_underscores:true,exclusion_list:'',ignore_tags:'',language:'ru',include_tags:'',exclude_tags:'',api_key:'',user_id:'',proxy_enabled:false,proxy_url:''};
-let currentLocale=LOCALE.ru;
-let adminPassword=localStorage.getItem('adminPassword')||'';
-let isAuthorized=false;
-let isLoading=false;
-let historyPage=1;
-let currentHistoryPostId=null;
-let zoom=1;
-let panX=0,panY=0;
-let dragStartX=0,dragStartY=0,dragging=false;
-const AUTH_STORAGE_KEY='adminPassword';
-const tabs=[...document.querySelectorAll('.tab')];
-const tabContents={main:document.getElementById('tab-main'),history:document.getElementById('tab-history'),settings:document.getElementById('tab-settings')};
-const includeTags=document.getElementById('includeTags'),excludeTags=document.getElementById('excludeTags'),randomBtn=document.getElementById('randomBtn'),clearBtn=document.getElementById('clearBtn'),loadPostBtn=document.getElementById('loadPostBtn'),postIdInput=document.getElementById('postIdInput');
-const tagsDisplay=document.getElementById('tagsDisplay'),urlDisplay=document.getElementById('urlDisplay'),previewContainer=document.getElementById('previewContainer'),statusMsg=document.getElementById('statusMsg'),manualTagsDisplay=document.getElementById('manualTagsDisplay'),manualUrlDisplay=document.getElementById('manualUrlDisplay'),manualPreviewContainer=document.getElementById('manualPreviewContainer'),manualStatusMsg=document.getElementById('manualStatusMsg');
-const historyContainer=document.getElementById('historyContainer'),historyCount=document.getElementById('historyCount'),historyPrevBtn=document.getElementById('historyPrevBtn'),historyNextBtn=document.getElementById('historyNextBtn'),historyPageInfo=document.getElementById('historyPageInfo');
-const settingsContent=document.getElementById('settings-content'),apiKey=document.getElementById('apiKey'),userId=document.getElementById('userId'),replaceUnderscores=document.getElementById('replaceUnderscores'),exclusionList=document.getElementById('exclusionList'),ignoreTags=document.getElementById('ignoreTags'),proxyEnabled=document.getElementById('proxyEnabled'),proxyUrl=document.getElementById('proxyUrl'),languageSelect=document.getElementById('languageSelect'),saveSettingsBtn=document.getElementById('saveSettingsBtn'),settingsStatus=document.getElementById('settingsStatus'),clearSeenBtn=document.getElementById('clearSeenBtn'),clearSeenStatus=document.getElementById('clearSeenStatus');
-const passwordModal=document.getElementById('passwordModal'),passwordInput=document.getElementById('passwordInput'),passwordError=document.getElementById('passwordError'),passwordCancel=document.getElementById('passwordCancel'),passwordSubmit=document.getElementById('passwordSubmit');
-const imageModal=document.getElementById('imageModal'),imageModalWrapper=document.getElementById('imageModalWrapper'),zoomInfo=document.getElementById('zoomInfo');
-const historyDetailModal=document.getElementById('historyDetailModal'),historyDetailImage=document.getElementById('historyDetailImage'),historyDetailTags=document.getElementById('historyDetailTags'),historyDetailUrl=document.getElementById('historyDetailUrl'),historyDetailCopyTags=document.getElementById('historyDetailCopyTags'),historyDetailDelete=document.getElementById('historyDetailDelete');
-function applyLocale(){currentLocale=LOCALE[config.language]||LOCALE.ru;document.documentElement.lang=config.language==='en'?'en':'ru';tabs[0].textContent=currentLocale.mainTab;tabs[1].textContent=currentLocale.historyTab;tabs[2].textContent=currentLocale.settingsTab;document.querySelector('label[for="includeTags"]').textContent=currentLocale.includeLabel;document.querySelector('label[for="excludeTags"]').textContent=currentLocale.excludeLabel;includeTags.placeholder=currentLocale.includePlaceholder;excludeTags.placeholder=currentLocale.excludePlaceholder;randomBtn.textContent=isLoading?currentLocale.loadingBtn:currentLocale.randomBtn;clearBtn.textContent=currentLocale.clearBtn;loadPostBtn.textContent=currentLocale.loadBtn;postIdInput.placeholder=currentLocale.postIdPlaceholder;apiKey.previousElementSibling.textContent=currentLocale.apiKeyLabel;userId.previousElementSibling.textContent=currentLocale.userIdLabel;replaceUnderscores.nextElementSibling.textContent=currentLocale.replaceUnderscoresLabel;exclusionList.previousElementSibling.textContent=currentLocale.exclusionListLabel;ignoreTags.previousElementSibling.textContent=currentLocale.ignoreTagsLabel;languageSelect.previousElementSibling.textContent=currentLocale.languageLabel;saveSettingsBtn.textContent=currentLocale.saveBtn;proxyEnabled.nextElementSibling.textContent=currentLocale.proxyEnabledLabel;proxyUrl.previousElementSibling.textContent=currentLocale.proxyUrlLabel;clearSeenBtn.textContent=currentLocale.clearSeenLabel;passwordInput.placeholder=currentLocale.passwordPlaceholder;passwordCancel.textContent=currentLocale.passwordCancel;passwordSubmit.textContent=currentLocale.passwordSubmit;document.getElementById('passwordModalTitle').textContent=currentLocale.passwordModalTitle;document.getElementById('seenCount').textContent=currentLocale.seenCountPrefix+'0';historyPrevBtn.textContent=currentLocale.prevPage;historyNextBtn.textContent=currentLocale.nextPage;}
-function parseGelbooruXML(xml){const doc=new DOMParser().parseFromString(xml,'text/xml');const post=doc.querySelector('post');if(!post)return null;return{id:post.getAttribute('id')||'',tags:(post.getAttribute('tags')||'').trim().split(/\s+/).filter(Boolean),file_url:post.getAttribute('file_url')||''};}
-function isVideo(url){return /\.(mp4|webm|ogg|ogv|mov|m4v)(?:$|\?)/i.test(String(url||''));}
-function displayPreview(container,fileUrl,loading=false){container.innerHTML='';if(loading){const spinner=document.createElement('span');spinner.className='spinner';container.appendChild(spinner);return;}if(!fileUrl){const span=document.createElement('span');span.style.color='#666';span.textContent=currentLocale.previewPlaceholder;container.appendChild(span);return;}const media=document.createElement(isVideo(fileUrl)?'video':'img');media.src='/api/image?url='+encodeURIComponent(fileUrl);if(media.tagName==='VIDEO'){media.controls=true;media.playsInline=true;media.preload='metadata';}else{media.addEventListener('click',()=>openImageModal(media.src));}media.addEventListener('error',()=>{container.innerHTML='';const span=document.createElement('span');span.style.color='#ff6b6b';span.textContent=currentLocale.statusError;container.appendChild(span);});container.appendChild(media);}
-function displayPostData(tags,postUrl,fileUrl,id){tagsDisplay.textContent=tags||currentLocale.tagsPlaceholder;urlDisplay.textContent=postUrl;urlDisplay.onclick=()=>window.open(postUrl,'_blank');displayPreview(previewContainer,fileUrl);statusMsg.textContent=currentLocale.statusSuccess;statusMsg.style.color='#51cf66';localStorage.setItem('gelbooru_last_post',JSON.stringify({tags,postUrl,imageUrl:fileUrl,id}));}
-function clearCachedPost(){localStorage.removeItem('gelbooru_last_post');}
-function loadCachedPost(){try{return JSON.parse(localStorage.getItem('gelbooru_last_post')||'null')}catch{return null}}
-function openImageModal(src){imageModalWrapper.innerHTML='';const img=document.createElement('img');img.src=src;imageModalWrapper.appendChild(img);zoom=1;panX=0;panY=0;updateTransform();imageModal.classList.add('active');}
-function closeImageModal(){imageModal.classList.remove('active');imageModalWrapper.innerHTML='';}
-function updateTransform(){const img=imageModalWrapper.querySelector('img');if(!img)return;img.style.transform=`translate(${panX}px, ${panY}px) scale(${zoom})`;zoomInfo.textContent=Math.round(zoom*100)+'%';}
-function copyTags(text,button){if(!text||text===currentLocale.tagsPlaceholder){alert(currentLocale.noTagsToCopy);return;}navigator.clipboard.writeText(text).then(()=>{const old=button.textContent;button.textContent=currentLocale.copiedBtn;setTimeout(()=>button.textContent=old,1200)}).catch(()=>{});}
-async function loadConfig(auth=false){try{const headers=auth&&adminPassword?{'X-Admin-Password':adminPassword}:{};const resp=await fetch('/api/config',{headers});if(resp.status===403){isAuthorized=false;adminPassword='';localStorage.removeItem(AUTH_STORAGE_KEY);throw new Error('forbidden');}if(!resp.ok)throw new Error('config');config={...config,...await resp.json()};if(auth){isAuthorized=true;apiKey.value=config.api_key||'';userId.value=config.user_id||'';}includeTags.value=config.include_tags||'';excludeTags.value=config.exclude_tags||'';replaceUnderscores.checked=config.replace_underscores!==false;exclusionList.value=config.exclusion_list||'';ignoreTags.value=config.ignore_tags||'';proxyEnabled.checked=!!config.proxy_enabled;proxyUrl.value=config.proxy_url||'';languageSelect.value=config.language||'ru';applyLocale();}catch(e){if(!auth)settingsStatus.textContent=currentLocale.settingsLoadError;}}
-async function saveConfig(){if(!isAuthorized){showPasswordModal();return;}settingsStatus.textContent='';const next={...config,api_key:apiKey.value.trim(),user_id:userId.value.trim(),replace_underscores:replaceUnderscores.checked,exclusion_list:exclusionList.value,ignore_tags:ignoreTags.value,proxy_enabled:proxyEnabled.checked,proxy_url:proxyUrl.value.trim(),language:languageSelect.value};try{const resp=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Password':adminPassword},body:JSON.stringify(next)});if(resp.status===403){isAuthorized=false;showPasswordModal();return;}if(!resp.ok)throw new Error();config=next;applyLocale();settingsStatus.textContent=currentLocale.settingsSaved;settingsStatus.style.color='#51cf66';}catch(e){settingsStatus.textContent=currentLocale.settingsSaveError;settingsStatus.style.color='#ff6b6b';}}
-async function autoSaveTags(){try{await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({include_tags:includeTags.value,exclude_tags:excludeTags.value})});config.include_tags=includeTags.value;config.exclude_tags=excludeTags.value;}catch(e){}}
-async function updateSeenCount(){try{const resp=await fetch('/api/seen/count');const data=await resp.json();document.getElementById('seenCount').textContent=currentLocale.seenCountPrefix+(data.count||0);}catch(e){}}
-async function fetchRandomPost(include,exclude){if(isLoading)return;isLoading=true;randomBtn.disabled=true;randomBtn.textContent=currentLocale.loadingBtn;statusMsg.textContent=currentLocale.statusLoading;statusMsg.style.color='#ffaa66';displayPreview(previewContainer,null,true);try{const resp=await fetch('/api/random',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({include,exclude})});if(!resp.ok){let errorMsg=currentLocale.statusError;try{const errData=await resp.json();if(errData.error)errorMsg=errData.error;if(resp.status===404)errorMsg=currentLocale.statusAllSeen;}catch(e){}throw new Error(errorMsg);}const xml=await resp.text();const data=parseGelbooruXML(xml);if(!data||!data.id){statusMsg.textContent=currentLocale.statusNoPost;statusMsg.style.color='#ff6b6b';tagsDisplay.textContent=currentLocale.tagsPlaceholder;urlDisplay.textContent='';displayPreview(previewContainer,null);clearCachedPost();return;}let tags=data.tags;const ignoreList=config.ignore_tags?config.ignore_tags.split(',').map(t=>t.trim().replace(/ /g,'_').toLowerCase()):[];if(ignoreList.length)tags=tags.filter(t=>!ignoreList.includes(t.toLowerCase().replace(/ /g,'_')));if(config.replace_underscores!==false){const exclusionArr=config.exclusion_list?config.exclusion_list.split(',').map(t=>t.trim()):[];tags=tags.map(t=>exclusionArr.includes(t)?t:t.replace(/_/g,' '));}displayPostData(tags.join(', '),'https://gelbooru.com/index.php?page=post&s=view&id='+data.id,data.file_url,data.id);updateSeenCount();}catch(e){console.error(e);statusMsg.textContent=currentLocale.statusError+': '+e.message;statusMsg.style.color='#ff6b6b';displayPreview(previewContainer,null);clearCachedPost();}finally{isLoading=false;randomBtn.disabled=false;randomBtn.textContent=currentLocale.randomBtn;}}
-async function fetchPostById(id){manualStatusMsg.textContent=currentLocale.statusLoading;manualStatusMsg.style.color='#ffaa66';displayPreview(manualPreviewContainer,null,true);try{const resp=await fetch('/api/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});if(!resp.ok){const errData=await resp.json();throw new Error(errData.error||'Server error');}const data=parseGelbooruXML(await resp.text());if(!data||!data.id){manualStatusMsg.textContent=currentLocale.statusNoPost;manualStatusMsg.style.color='#ff6b6b';displayPreview(manualPreviewContainer,null);return;}let tags=data.tags;const ignoreList=config.ignore_tags?config.ignore_tags.split(',').map(t=>t.trim().replace(/ /g,'_').toLowerCase()):[];if(ignoreList.length)tags=tags.filter(t=>!ignoreList.includes(t.toLowerCase().replace(/ /g,'_')));if(config.replace_underscores!==false){const exclusionArr=config.exclusion_list?config.exclusion_list.split(',').map(t=>t.trim()):[];tags=tags.map(t=>exclusionArr.includes(t)?t:t.replace(/_/g,' '));}manualTagsDisplay.textContent=tags.join(', ')||currentLocale.tagsPlaceholder;const postUrl='https://gelbooru.com/index.php?page=post&s=view&id='+data.id;manualUrlDisplay.textContent=postUrl;manualUrlDisplay.onclick=()=>window.open(postUrl,'_blank');displayPreview(manualPreviewContainer,data.file_url);manualStatusMsg.textContent=currentLocale.statusSuccess;manualStatusMsg.style.color='#51cf66';}catch(e){console.error(e);manualStatusMsg.textContent=currentLocale.statusError+': '+e.message;manualStatusMsg.style.color='#ff6b6b';displayPreview(manualPreviewContainer,null);}}
-function showPasswordModal(){passwordModal.classList.add('active');passwordInput.value='';passwordError.textContent='';passwordInput.focus();}
-function hidePasswordModal(){passwordModal.classList.remove('active');}
-async function loadHistory(page=1){try{const resp=await fetch('/api/history?page='+encodeURIComponent(page)+'&limit=24');if(!resp.ok)throw new Error();const data=await resp.json();historyPage=data.page;historyCount.textContent=data.total;historyPageInfo.textContent=currentLocale.pageInfo.replace('{page}',data.page).replace('{total}',data.totalPages);historyPrevBtn.disabled=data.page<=1;historyNextBtn.disabled=data.page>=data.totalPages;historyContainer.innerHTML='';if(!data.items.length){historyContainer.innerHTML='<div class="history-empty">'+currentLocale.historyEmpty+'</div>';return;}for(const item of data.items){const el=document.createElement('div');el.className='history-item';const img=document.createElement('img');img.src='/api/history/image?id='+encodeURIComponent(item.post_id);img.alt='';const tags=document.createElement('div');tags.className='history-tags';tags.textContent=item.tags||'';el.appendChild(img);el.appendChild(tags);el.addEventListener('click',()=>openHistoryDetail(item.post_id));historyContainer.appendChild(el);}}catch(e){historyContainer.innerHTML='<div class="history-empty">'+currentLocale.statusError+'</div>';}}
-async function openHistoryDetail(id){try{const resp=await fetch('/api/history/post?id='+encodeURIComponent(id));if(!resp.ok)throw new Error();const post=await resp.json();currentHistoryPostId=post.post_id;historyDetailImage.innerHTML='';const img=document.createElement('img');img.src='data:image/jpeg;base64,'+post.image_data;img.addEventListener('click',()=>openImageModal(img.src));historyDetailImage.appendChild(img);historyDetailTags.textContent=post.tags||'';historyDetailUrl.textContent=post.file_url||'';historyDetailUrl.onclick=()=>window.open(post.file_url,'_blank');historyDetailModal.classList.add('active');}catch(e){loadHistory(historyPage);}}
-async function deleteHistoryCurrent(){if(!currentHistoryPostId)return;try{const resp=await fetch('/api/history/post?id='+encodeURIComponent(currentHistoryPostId),{method:'DELETE',headers:{'X-Admin-Password':adminPassword}});if(!resp.ok)throw new Error();historyDetailModal.classList.remove('active');currentHistoryPostId=null;await loadHistory(historyPage);}catch(e){alert(currentLocale.deleteError);}}
-async function clearSeen(){if(!isAuthorized){showPasswordModal();return;}if(!confirm(currentLocale.confirmClearHistory))return;try{const resp=await fetch('/api/history',{method:'DELETE',headers:{'X-Admin-Password':adminPassword}});if(!resp.ok)throw new Error();clearSeenStatus.textContent=currentLocale.historyCleared;clearSeenStatus.style.color='#51cf66';await loadHistory(1);updateSeenCount();}catch(e){clearSeenStatus.textContent=currentLocale.clearError;clearSeenStatus.style.color='#ff6b6b';}}
-tabs.forEach(tab=>tab.addEventListener('click',async()=>{const name=tab.dataset.tab;if(name==='settings'&&!isAuthorized){showPasswordModal();return;}tabs.forEach(t=>t.classList.toggle('active',t===tab));Object.entries(tabContents).forEach(([key,el])=>el.classList.toggle('active',key===name));if(name==='history')await loadHistory(1);}));
-passwordCancel.addEventListener('click',hidePasswordModal);passwordModal.addEventListener('click',e=>{if(e.target===passwordModal)hidePasswordModal();});passwordSubmit.addEventListener('click',async()=>{const pwd=passwordInput.value.trim();if(!pwd){passwordError.textContent='Введите пароль';return;}try{const resp=await fetch('/api/config',{headers:{'X-Admin-Password':pwd}});if(resp.status===403){passwordError.textContent=currentLocale.passwordError;return;}if(!resp.ok)throw new Error();adminPassword=pwd;localStorage.setItem(AUTH_STORAGE_KEY,pwd);isAuthorized=true;hidePasswordModal();await loadConfig(true);tabs.forEach(t=>t.classList.remove('active'));document.querySelector('[data-tab="settings"]').classList.add('active');tabContents.main.classList.remove('active');tabContents.settings.classList.add('active');}catch(e){passwordError.textContent=currentLocale.settingsLoadError;}});
-passwordInput.addEventListener('keydown',e=>{if(e.key==='Enter')passwordSubmit.click();if(e.key==='Escape')hidePasswordModal();});
-document.getElementById('copyTagsBtn').addEventListener('click',()=>copyTags(tagsDisplay.textContent,document.getElementById('copyTagsBtn')));document.getElementById('copyManualTagsBtn').addEventListener('click',()=>copyTags(manualTagsDisplay.textContent,document.getElementById('copyManualTagsBtn')));includeTags.addEventListener('input',autoSaveTags);excludeTags.addEventListener('input',autoSaveTags);randomBtn.addEventListener('click',()=>fetchRandomPost(includeTags.value.trim(),excludeTags.value.trim()));clearBtn.addEventListener('click',()=>{tagsDisplay.textContent=currentLocale.tagsPlaceholder;urlDisplay.textContent='';displayPreview(previewContainer,null);statusMsg.textContent='';clearCachedPost();});loadPostBtn.addEventListener('click',()=>{const input=postIdInput.value.trim();const match=input.match(/id=(\d+)/);const id=match?parseInt(match[1]):/^\d+$/.test(input)?parseInt(input):null;if(id)fetchPostById(id);else{manualStatusMsg.textContent=currentLocale.statusError+': Неверный ID или ссылка';manualStatusMsg.style.color='#ff6b6b';}});saveSettingsBtn.addEventListener('click',saveConfig);clearSeenBtn.addEventListener('click',clearSeen);historyPrevBtn.addEventListener('click',()=>loadHistory(historyPage-1));historyNextBtn.addEventListener('click',()=>loadHistory(historyPage+1));historyDetailCopyTags.addEventListener('click',()=>copyTags(historyDetailTags.textContent,historyDetailCopyTags));historyDetailDelete.addEventListener('click',deleteHistoryCurrent);historyDetailModal.addEventListener('click',e=>{if(e.target===historyDetailModal)historyDetailModal.classList.remove('active');});imageModal.addEventListener('click',e=>{if(e.target===imageModal)closeImageModal();});imageModal.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.min(5,Math.max(0.5,zoom+(e.deltaY<0?0.1:-0.1)));updateTransform();},{passive:false});imageModalWrapper.addEventListener('pointerdown',e=>{dragging=true;dragStartX=e.clientX-panX;dragStartY=e.clientY-panY;imageModalWrapper.setPointerCapture(e.pointerId);});imageModalWrapper.addEventListener('pointermove',e=>{if(!dragging)return;panX=e.clientX-dragStartX;panY=e.clientY-dragStartY;updateTransform();});imageModalWrapper.addEventListener('pointerup',()=>dragging=false);imageModalWrapper.addEventListener('pointercancel',()=>dragging=false);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeImageModal();historyDetailModal.classList.remove('active');hidePasswordModal();}});
-async function init(){await loadConfig(false);if(adminPassword)await loadConfig(true);const cached=loadCachedPost();if(cached&&cached.imageUrl)displayPostData(cached.tags||'',cached.postUrl||'',cached.imageUrl,cached.id||'');updateSeenCount();}
-init();
+    const LOCALE = {
+        ru: {
+            mainTab: 'Главная',
+            historyTab: 'История',
+            settingsTab: 'Настройки',
+            includeLabel: 'Включить теги',
+            excludeLabel: 'Исключить теги',
+            includePlaceholder: 'например: 1girl, blue_hair, solo',
+            excludePlaceholder: 'например: nsfw, text, watermark',
+            randomBtn: 'Случайный',
+            loadingBtn: 'Загрузка...',
+            clearBtn: 'Очистить результат',
+            loadBtn: 'Загрузить пост',
+            postIdPlaceholder: 'https://gelbooru.com/index.php?page=post&s=view&id=123456 или просто 123456',
+            tagsPlaceholder: 'Теги появятся здесь',
+            previewPlaceholder: 'Превью',
+            statusLoading: 'Загрузка...',
+            statusNoPost: 'Пост не найден',
+            statusAllSeen: 'Все доступные посты уже просмотрены',
+            statusError: 'Ошибка',
+            statusSuccess: 'Успешно',
+            settingsSaved: 'Настройки сохранены!',
+            settingsLoadError: 'Ошибка загрузки настроек',
+            settingsSaveError: 'Ошибка сохранения настроек',
+            apiKeyLabel: 'API ключ',
+            userIdLabel: 'ID пользователя',
+            replaceUnderscoresLabel: 'Заменять подчёркивания на пробелы при вставке',
+            exclusionListLabel: 'Список исключений',
+            ignoreTagsLabel: 'Игнорируемые теги',
+            languageLabel: 'Язык интерфейса',
+            saveBtn: 'Сохранить настройки',
+            accountSettingsLink: 'в настройках аккаунта',
+            getLink: 'Получить',
+            exclusionHint: 'Теги, в которых не нужно заменять _ на пробел, через запятую.',
+            ignoreHint: 'Теги будут удалены из результата (не влияют на поиск). Через запятую.',
+            proxyEnabledLabel: 'Включить прокси (HTTP/HTTPS)',
+            proxyUrlLabel: 'URL прокси',
+            clearSeenLabel: 'Очистить историю просмотренных (и кэш)',
+            seenCountPrefix: 'Просмотрено: ',
+            copyBtn: '📋 Копировать',
+            copiedBtn: '✅ Скопировано',
+            passwordModalTitle: 'Введите пароль',
+            passwordPlaceholder: 'Пароль',
+            passwordCancel: 'Отмена',
+            passwordSubmit: 'Войти',
+            passwordError: 'Неверный пароль',
+            passwordRequired: 'Введите пароль',
+            historyEmpty: 'История пуста',
+            historyCount: 'Всего: ',
+            copyTags: '📋 Копировать теги',
+            deletePost: '🗑️ Удалить',
+            copied: '✅ Скопировано',
+            confirmClearHistory: 'Очистить всю историю?',
+            historyCleared: '✅ История и кэш очищены',
+            clearError: '❌ Ошибка очистки',
+            deleteError: '❌ Ошибка удаления',
+            loadPostError: 'Не удалось загрузить пост',
+            noTagsToCopy: 'Нет тегов для копирования',
+            prevPage: 'Назад',
+            nextPage: 'Вперёд',
+            pageInfo: 'Страница {page} из {total}',
+            invalidId: 'Неверный ID или ссылка',
+            accountHeading: 'Аккаунт Gelbooru',
+            tagProcessingHeading: 'Обработка тегов',
+            proxyHeading: 'Прокси',
+            interfaceHeading: 'Интерфейс',
+            viewHistoryHeading: 'История просмотров',
+            videoLoadError: '⚠️ Не удалось загрузить видео',
+            previewLoadError: '⚠️ Не удалось загрузить превью',
+            openImageTitle: 'Открыть изображение'
+        },
+        en: {
+            mainTab: 'Main',
+            historyTab: 'History',
+            settingsTab: 'Settings',
+            includeLabel: 'Include tags',
+            excludeLabel: 'Exclude tags',
+            includePlaceholder: 'e.g. 1girl, blue_hair, solo',
+            excludePlaceholder: 'e.g. nsfw, text, watermark',
+            randomBtn: 'Random',
+            loadingBtn: 'Loading...',
+            clearBtn: 'Clear result',
+            loadBtn: 'Load Post',
+            postIdPlaceholder: 'https://gelbooru.com/index.php?page=post&s=view&id=123456 or just 123456',
+            tagsPlaceholder: 'Tags will appear here',
+            previewPlaceholder: 'Preview',
+            statusLoading: 'Loading...',
+            statusNoPost: 'Post not found',
+            statusAllSeen: 'All available posts have been seen',
+            statusError: 'Error',
+            statusSuccess: 'Success',
+            settingsSaved: 'Settings saved!',
+            settingsLoadError: 'Failed to load settings',
+            settingsSaveError: 'Failed to save settings',
+            apiKeyLabel: 'API key',
+            userIdLabel: 'User ID',
+            replaceUnderscoresLabel: 'Replace underscores with spaces on insert',
+            exclusionListLabel: 'Exclusion list',
+            ignoreTagsLabel: 'Ignored tags',
+            languageLabel: 'Interface language',
+            saveBtn: 'Save settings',
+            accountSettingsLink: 'in account settings',
+            getLink: 'Get it',
+            exclusionHint: 'Specify tags where underscores should NOT be replaced with spaces, separated by commas.',
+            ignoreHint: 'Tags will be removed from the result (does not affect search). Separated by commas.',
+            proxyEnabledLabel: 'Enable proxy (HTTP/HTTPS)',
+            proxyUrlLabel: 'Proxy URL',
+            clearSeenLabel: 'Clear seen history (and cache)',
+            seenCountPrefix: 'Seen: ',
+            copyBtn: '📋 Copy',
+            copiedBtn: '✅ Copied',
+            passwordModalTitle: 'Enter password',
+            passwordPlaceholder: 'Password',
+            passwordCancel: 'Cancel',
+            passwordSubmit: 'Login',
+            passwordError: 'Wrong password',
+            passwordRequired: 'Enter password',
+            historyEmpty: 'History is empty',
+            historyCount: 'Total: ',
+            copyTags: '📋 Copy tags',
+            deletePost: '🗑️ Delete',
+            copied: '✅ Copied',
+            confirmClearHistory: 'Clear entire history?',
+            historyCleared: '✅ History and cache cleared',
+            clearError: '❌ Clear error',
+            deleteError: '❌ Delete error',
+            loadPostError: 'Failed to load post',
+            noTagsToCopy: 'No tags to copy',
+            prevPage: 'Back',
+            nextPage: 'Next',
+            pageInfo: 'Page {page} of {total}',
+            invalidId: 'Invalid ID or link',
+            accountHeading: 'Gelbooru Account',
+            tagProcessingHeading: 'Tag Processing',
+            proxyHeading: 'Proxy',
+            interfaceHeading: 'Interface',
+            viewHistoryHeading: 'View History',
+            videoLoadError: '⚠️ Failed to load video',
+            previewLoadError: '⚠️ Failed to load preview',
+            openImageTitle: 'Open image'
+        }
+    };
+
+    let config = {};
+    let currentLang = 'ru';
+    let currentLocale = LOCALE.ru;
+    let saveTimeout = null;
+    const AUTH_STORAGE_KEY = 'adminPassword';
+    let adminPassword = localStorage.getItem(AUTH_STORAGE_KEY) || null;
+    let isAuthorized = false;
+    let isReady = false;
+    let pendingAfterAuth = null;
+
+    let currentPage = 1;
+    const itemsPerPage = 24;
+    let allHistoryData = [];
+    let historyTotalPages = 1;
+    let historyAbortController = null;
+    let tagSaveAbortController = null;
+
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = {
+        main: document.getElementById('tab-main'),
+        history: document.getElementById('tab-history'),
+        settings: document.getElementById('tab-settings')
+    };
+
+    const includeTags = document.getElementById('includeTags');
+    const excludeTags = document.getElementById('excludeTags');
+    const randomBtn = document.getElementById('randomBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const tagsDisplay = document.getElementById('tagsDisplay');
+    const urlDisplay = document.getElementById('urlDisplay');
+    const previewContainer = document.getElementById('previewContainer');
+    const statusMsg = document.getElementById('statusMsg');
+    const copyTagsBtn = document.getElementById('copyTagsBtn');
+    const copyManualTagsBtn = document.getElementById('copyManualTagsBtn');
+
+    const postIdInput = document.getElementById('postIdInput');
+    const loadPostBtn = document.getElementById('loadPostBtn');
+    const manualTagsDisplay = document.getElementById('manualTagsDisplay');
+    const manualUrlDisplay = document.getElementById('manualUrlDisplay');
+    const manualPreviewContainer = document.getElementById('manualPreviewContainer');
+    const manualStatusMsg = document.getElementById('manualStatusMsg');
+
+    const apiKey = document.getElementById('apiKey');
+    const userId = document.getElementById('userId');
+    const replaceUnderscores = document.getElementById('replaceUnderscores');
+    const exclusionList = document.getElementById('exclusionList');
+    const ignoreTags = document.getElementById('ignoreTags');
+    const languageSelect = document.getElementById('languageSelect');
+    const proxyEnabled = document.getElementById('proxyEnabled');
+    const proxyUrl = document.getElementById('proxyUrl');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const settingsStatus = document.getElementById('settingsStatus');
+    const clearSeenBtn = document.getElementById('clearSeenBtn');
+    const clearSeenStatus = document.getElementById('clearSeenStatus');
+    const seenCountSpan = document.getElementById('seenCount');
+
+    const historyContainer = document.getElementById('historyContainer');
+    const historyCountLabel = document.getElementById('historyCountLabel');
+    const historyPrevBtn = document.getElementById('historyPrevBtn');
+    const historyNextBtn = document.getElementById('historyNextBtn');
+    const historyPageInfo = document.getElementById('historyPageInfo');
+
+    const passwordModal = document.getElementById('passwordModal');
+    const passwordInput = document.getElementById('passwordInput');
+    const passwordError = document.getElementById('passwordError');
+    const passwordSubmit = document.getElementById('passwordSubmit');
+    const passwordCancel = document.getElementById('passwordCancel');
+    const passwordModalTitle = document.getElementById('passwordModalTitle');
+
+    const imageModal = document.getElementById('imageModal');
+    const imageModalWrapper = document.getElementById('imageModalWrapper');
+    const zoomInfo = document.getElementById('zoomInfo');
+    const historyDetailModal = document.getElementById('historyDetailModal');
+    const historyDetailImage = document.getElementById('historyDetailImage');
+    const historyDetailTags = document.getElementById('historyDetailTags');
+    const historyDetailUrl = document.getElementById('historyDetailUrl');
+    const historyDetailCopyTags = document.getElementById('historyDetailCopyTags');
+    const historyDetailDelete = document.getElementById('historyDetailDelete');
+
+    let currentScale = 1;
+    let translateX = 0;
+    let translateY = 0;
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let lastTranslateX = 0, lastTranslateY = 0;
+    let modalMedia = null;
+    let currentHistoryPostId = null;
+    let isLoading = false;
+
+    function isVideo(url) {
+        const ext = url.split('?')[0].split('.').pop().toLowerCase();
+        return ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'avi'].includes(ext);
+    }
+
+    function setPlaceholder(container, text) {
+        container.textContent = '';
+        const span = document.createElement('span');
+        span.style.color = '#666';
+        span.textContent = text;
+        container.appendChild(span);
+    }
+
+    function applyLocale(lang) {
+        const loc = LOCALE[lang] || LOCALE.ru;
+        document.querySelector('[data-tab="main"] .tab-label').textContent = loc.mainTab;
+        document.querySelector('[data-tab="history"] .tab-label').textContent = loc.historyTab;
+        document.querySelector('[data-tab="settings"] .tab-label').textContent = loc.settingsTab;
+        document.querySelector('label[for="includeTags"]').textContent = loc.includeLabel;
+        document.querySelector('label[for="excludeTags"]').textContent = loc.excludeLabel;
+        includeTags.placeholder = loc.includePlaceholder;
+        excludeTags.placeholder = loc.excludePlaceholder;
+        randomBtn.textContent = loc.randomBtn;
+        clearBtn.textContent = loc.clearBtn;
+        loadPostBtn.textContent = loc.loadBtn;
+        postIdInput.placeholder = loc.postIdPlaceholder;
+        if (!previewContainer.querySelector('img') && !previewContainer.querySelector('video') && !previewContainer.querySelector('.spinner')) {
+            setPlaceholder(previewContainer, loc.previewPlaceholder);
+        }
+        if (!manualPreviewContainer.querySelector('img') && !manualPreviewContainer.querySelector('video') && !manualPreviewContainer.querySelector('.spinner')) {
+            setPlaceholder(manualPreviewContainer, loc.previewPlaceholder);
+        }
+        const groups = document.querySelectorAll('.settings-group');
+        if (groups[0]) { const l = groups[0].querySelector('.h3-label'); if (l) l.textContent = loc.accountHeading; }
+        if (groups[1]) { const l = groups[1].querySelector('.h3-label'); if (l) l.textContent = loc.tagProcessingHeading; }
+        if (groups[2]) { const l = groups[2].querySelector('.h3-label'); if (l) l.textContent = loc.proxyHeading; }
+        if (groups[3]) { const l = groups[3].querySelector('.h3-label'); if (l) l.textContent = loc.interfaceHeading; }
+        if (groups[4]) { const l = groups[4].querySelector('.h3-label'); if (l) l.textContent = loc.viewHistoryHeading; }
+        document.querySelector('label[for="apiKey"]').textContent = loc.apiKeyLabel;
+        document.querySelector('label[for="userId"]').textContent = loc.userIdLabel;
+        document.querySelector('label[for="replaceUnderscores"]').textContent = loc.replaceUnderscoresLabel;
+        document.querySelector('label[for="exclusionList"]').textContent = loc.exclusionListLabel;
+        document.querySelector('label[for="ignoreTags"]').textContent = loc.ignoreTagsLabel;
+        document.querySelector('label[for="languageSelect"]').textContent = loc.languageLabel;
+        document.querySelector('label[for="proxyEnabled"]').textContent = loc.proxyEnabledLabel;
+        document.querySelector('label[for="proxyUrl"]').textContent = loc.proxyUrlLabel;
+        clearSeenBtn.textContent = loc.clearSeenLabel;
+        saveSettingsBtn.textContent = loc.saveBtn;
+
+        const accHint = document.getElementById('accountHint');
+        if (accHint) {
+            accHint.textContent = '';
+            accHint.appendChild(document.createTextNode(loc.getLink + ' '));
+            const a = document.createElement('a');
+            a.href = 'https://gelbooru.com/index.php?page=account&s=options';
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = loc.accountSettingsLink;
+            accHint.appendChild(a);
+        }
+        const excHint = document.getElementById('exclusionHint');
+        if (excHint) excHint.textContent = loc.exclusionHint;
+        const ignHint = document.getElementById('ignoreHint');
+        if (ignHint) ignHint.textContent = loc.ignoreHint;
+
+        if (copyTagsBtn.textContent !== loc.copiedBtn) copyTagsBtn.textContent = loc.copyBtn;
+        if (copyManualTagsBtn.textContent !== loc.copiedBtn) copyManualTagsBtn.textContent = loc.copyBtn;
+
+        passwordModalTitle.textContent = loc.passwordModalTitle;
+        passwordInput.placeholder = loc.passwordPlaceholder;
+        passwordCancel.textContent = loc.passwordCancel;
+        passwordSubmit.textContent = loc.passwordSubmit;
+
+        historyDetailCopyTags.textContent = loc.copyTags;
+        historyDetailDelete.textContent = loc.deletePost;
+        historyPrevBtn.textContent = loc.prevPage;
+        historyNextBtn.textContent = loc.nextPage;
+
+        currentLocale = loc;
+        updateSeenCount();
+        if (document.getElementById('tab-history').classList.contains('active')) {
+            if (allHistoryData.length) renderHistoryPage(currentPage);
+            else loadHistory();
+        }
+    }
+
+    async function updateSeenCount() {
+        try {
+            const resp = await fetch('/api/seen/count');
+            if (resp.ok) {
+                const data = await resp.json();
+                seenCountSpan.textContent = currentLocale.seenCountPrefix + data.count;
+            }
+        } catch (e) {
+            console.error('Ошибка получения количества просмотренных:', e);
+        }
+    }
+
+    function getSavedHistoryPage() {
+        try {
+            const saved = localStorage.getItem('history_page');
+            if (saved) {
+                const page = parseInt(saved);
+                if (!isNaN(page) && page > 0) return page;
+            }
+        } catch (e) {}
+        return 1;
+    }
+
+    async function loadHistory(page = currentPage) {
+        if (historyAbortController) historyAbortController.abort();
+        const controller = new AbortController();
+        historyAbortController = controller;
+        try {
+            const resp = await fetch('/api/history?page=' + encodeURIComponent(page) + '&limit=' + itemsPerPage, {
+                signal: controller.signal,
+                cache: 'no-store'
+            });
+            if (!resp.ok) throw new Error('Failed to load history');
+            const data = await resp.json();
+            allHistoryData = Array.isArray(data.items) ? data.items : [];
+            historyTotalPages = Math.max(1, Number(data.totalPages) || 1);
+            currentPage = Math.min(Math.max(Number(data.page) || 1, 1), historyTotalPages);
+            historyCountLabel.textContent = currentLocale.historyCount + (Number(data.total) || 0);
+            renderHistoryPage(currentPage);
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            console.error('Ошибка загрузки истории:', e);
+            historyContainer.textContent = '';
+            const empty = document.createElement('div');
+            empty.className = 'history-empty';
+            empty.textContent = currentLocale.statusError + ': ' + e.message;
+            historyContainer.appendChild(empty);
+        } finally {
+            if (historyAbortController === controller) historyAbortController = null;
+        }
+    }
+
+    function renderHistoryPage(page) {
+        if (allHistoryData.length === 0) {
+            currentPage = 1;
+            historyTotalPages = Math.max(1, historyTotalPages);
+            historyContainer.textContent = '';
+            const empty = document.createElement('div');
+            empty.className = 'history-empty';
+            empty.textContent = currentLocale.historyEmpty;
+            historyContainer.appendChild(empty);
+            historyPrevBtn.disabled = true;
+            historyNextBtn.disabled = true;
+            historyPageInfo.textContent = currentLocale.pageInfo.replace('{page}', '1').replace('{total}', String(historyTotalPages));
+            try { localStorage.removeItem('history_page'); } catch (e) {}
+            return;
+        }
+
+        currentPage = Math.min(Math.max(Number(page) || 1, 1), historyTotalPages);
+        historyContainer.textContent = '';
+
+        for (const item of allHistoryData) {
+            const card = document.createElement('div');
+            card.className = 'history-item';
+            card.dataset.postId = String(item.post_id);
+
+            const img = document.createElement('img');
+            img.src = '/api/history/image?id=' + encodeURIComponent(item.post_id);
+            img.alt = 'preview';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.onerror = () => { img.style.display = 'none'; };
+
+            const tags = document.createElement('div');
+            tags.className = 'history-tags';
+            const tagText = item.tags ? String(item.tags).split(/\s+/).slice(0, 5).join(' ') : '';
+            tags.textContent = tagText;
+
+            card.appendChild(img);
+            card.appendChild(tags);
+            historyContainer.appendChild(card);
+        }
+
+        historyPrevBtn.disabled = currentPage <= 1;
+        historyNextBtn.disabled = currentPage >= historyTotalPages;
+        historyPageInfo.textContent = currentLocale.pageInfo
+            .replace('{page}', String(currentPage))
+            .replace('{total}', String(historyTotalPages));
+
+        try { localStorage.setItem('history_page', currentPage); } catch (e) {}
+    }
+
+    historyPrevBtn.addEventListener('click', () => {
+        if (currentPage > 1) loadHistory(currentPage - 1);
+    });
+
+    historyNextBtn.addEventListener('click', () => {
+        if (currentPage < historyTotalPages) loadHistory(currentPage + 1);
+    });
+
+    historyContainer.addEventListener('click', (e) => {
+        const item = e.target.closest('.history-item');
+        if (item) openHistoryDetail(item.dataset.postId);
+    });
+
+    async function openHistoryDetail(postId) {
+        try {
+            const resp = await fetch('/api/history/post?id=' + encodeURIComponent(postId));
+            if (!resp.ok) throw new Error('Post not found');
+            const post = await resp.json();
+            currentHistoryPostId = post.post_id;
+            historyDetailImage.textContent = '';
+            if (post.image_data) {
+                const media = document.createElement('img');
+                media.src = 'data:image/jpeg;base64,' + post.image_data;
+                media.alt = 'Preview';
+                media.draggable = false;
+                media.style.cursor = 'zoom-in';
+                media.title = currentLocale.openImageTitle;
+                media.dataset.originalUrl = post.file_url || '';
+                historyDetailImage.appendChild(media);
+                media.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (post.file_url) openImageModal(post.file_url);
+                });
+            }
+            let tags = post.tags || '';
+            const ignoreList = config.ignore_tags ? config.ignore_tags.split(',').map(t => t.trim().replace(/ /g, '_').toLowerCase()) : [];
+            if (ignoreList.length) {
+                tags = tags.split(' ').filter(t => !ignoreList.includes(t.toLowerCase().replace(/ /g, '_'))).join(' ');
+            }
+            if (config.replace_underscores !== false) {
+                const exclusionArr = config.exclusion_list ? config.exclusion_list.split(',').map(t => t.trim()) : [];
+                tags = tags.split(' ').map(t => {
+                    if (exclusionArr.includes(t)) return t;
+                    return t.replace(/_/g, ' ');
+                }).join(', ');
+            } else {
+                tags = tags.replace(/ /g, ', ');
+            }
+            historyDetailTags.textContent = tags || currentLocale.tagsPlaceholder;
+            historyDetailCopyTags.textContent = currentLocale.copyTags;
+            historyDetailCopyTags.onclick = () => {
+                copyTagsSimple(tags);
+            };
+            const postUrl = 'https://gelbooru.com/index.php?page=post&s=view&id=' + post.post_id;
+            historyDetailUrl.textContent = postUrl;
+            historyDetailUrl.onclick = () => window.open(postUrl, '_blank', 'noopener,noreferrer');
+            historyDetailDelete.textContent = currentLocale.deletePost;
+            historyDetailDelete.onclick = () => {
+                deleteHistoryPost(post.post_id);
+            };
+            historyDetailModal.classList.add('active');
+            updateBodyModalLock();
+        } catch (e) {
+            console.error('Ошибка загрузки деталей поста:', e);
+            alert(currentLocale.loadPostError);
+        }
+    }
+
+    function copyTagsSimple(text) {
+        if (!text || text === currentLocale.tagsPlaceholder) {
+            alert(currentLocale.noTagsToCopy);
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                historyDetailCopyTags.textContent = currentLocale.copied;
+                setTimeout(() => historyDetailCopyTags.textContent = currentLocale.copyTags, 3000);
+            }).catch(() => {
+                fallbackCopySimple(text);
+            });
+        } else {
+            fallbackCopySimple(text);
+        }
+    }
+
+    function fallbackCopySimple(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            historyDetailCopyTags.textContent = currentLocale.copied;
+            setTimeout(() => historyDetailCopyTags.textContent = currentLocale.copyTags, 3000);
+        } catch (e) {
+            alert(currentLocale.noTagsToCopy);
+        }
+        document.body.removeChild(textarea);
+    }
+
+    function requireAuth(action) {
+        if (isAuthorized) {
+            action();
+            return;
+        }
+        pendingAfterAuth = action;
+        showPasswordModal();
+    }
+
+    function deleteHistoryPost(postId) {
+        requireAuth(async () => {
+            try {
+                const resp = await fetch('/api/history/post?id=' + encodeURIComponent(postId), {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    historyDetailModal.classList.remove('active');
+                    updateBodyModalLock();
+                    loadHistory();
+                    updateSeenCount();
+                } else {
+                    alert(currentLocale.deleteError);
+                }
+            } catch (e) {
+                console.error('Ошибка удаления:', e);
+                alert(currentLocale.deleteError);
+            }
+        });
+    }
+
+    historyDetailModal.addEventListener('click', (e) => {
+        if (e.target === historyDetailModal) {
+            historyDetailModal.classList.remove('active');
+            updateBodyModalLock();
+        }
+    });
+
+    async function clearHistory() {
+        if (!confirm(currentLocale.confirmClearHistory)) return;
+        try {
+            const resp = await fetch('/api/history', {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const data = await resp.json();
+            if (data.success) {
+                localStorage.removeItem('history_page');
+                loadHistory();
+                updateSeenCount();
+                clearSeenStatus.textContent = currentLocale.historyCleared;
+                clearSeenStatus.style.color = '#51cf66';
+            } else {
+                clearSeenStatus.textContent = currentLocale.clearError;
+                clearSeenStatus.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            clearSeenStatus.textContent = currentLocale.clearError + ': ' + e.message;
+            clearSeenStatus.style.color = '#ff6b6b';
+        }
+        setTimeout(() => clearSeenStatus.textContent = '', 5000);
+    }
+
+    clearSeenBtn.addEventListener('click', () => requireAuth(clearHistory));
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabId = tab.dataset.tab;
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            Object.keys(tabContents).forEach(key => {
+                tabContents[key].classList.toggle('active', key === tabId);
+            });
+            try {
+                localStorage.setItem('selectedTab', tabId);
+            } catch (e) {}
+            if (tabId === 'settings') {
+                if (isAuthorized) {
+                    loadConfig(true);
+                } else {
+                    showPasswordModal();
+                }
+            }
+            if (tabId === 'history') {
+                loadHistory(getSavedHistoryPage());
+            }
+        });
+    });
+
+    function restoreTab() {
+        try {
+            const saved = localStorage.getItem('selectedTab');
+            if (saved && saved !== 'main') {
+                const tab = document.querySelector('[data-tab="' + saved + '"]');
+                if (tab) {
+                    tab.click();
+                }
+            }
+        } catch (e) {}
+    }
+
+    function showSpinner(container) {
+        container.textContent = '';
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        container.appendChild(spinner);
+    }
+
+    function saveCachedPost(data) {
+        try {
+            localStorage.setItem('cached_post', JSON.stringify(data));
+        } catch (e) {}
+    }
+
+    function loadCachedPost() {
+        try {
+            const raw = localStorage.getItem('cached_post');
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function clearCachedPost() {
+        try {
+            localStorage.removeItem('cached_post');
+        } catch (e) {}
+    }
+
+    function openImageModal(url) {
+        if (!url || isVideo(url)) return;
+
+        const wrapper = imageModalWrapper;
+        wrapper.textContent = '';
+
+        const media = document.createElement('img');
+        media.src = '/api/image?url=' + encodeURIComponent(url);
+        media.alt = 'Превью';
+        media.draggable = false;
+        media.dataset.originalUrl = url;
+
+        modalMedia = media;
+        wrapper.appendChild(media);
+
+        currentScale = 0.5;
+        translateX = 0;
+        translateY = 0;
+        updateTransform(media);
+        zoomInfo.textContent = '50%';
+
+        imageModal.classList.add('active');
+        updateBodyModalLock();
+    }
+
+    function updateBodyModalLock() {
+        const hasOpenModal = imageModal.classList.contains('active') || historyDetailModal.classList.contains('active');
+        document.body.style.overflow = hasOpenModal ? 'hidden' : '';
+    }
+
+    function closeImageModal() {
+        imageModal.classList.remove('active');
+        if (modalMedia && modalMedia.tagName === 'VIDEO') {
+            modalMedia.pause();
+        }
+        modalMedia = null;
+        imageModalWrapper.textContent = '';
+        updateBodyModalLock();
+    }
+
+    function updateTransform(media) {
+        if (!media) return;
+        media.style.transform = 'translate(' + translateX + 'px, ' + translateY + 'px) scale(' + currentScale + ')';
+    }
+
+    function getModalMedia() {
+        return imageModalWrapper.querySelector('img, video');
+    }
+
+    imageModalWrapper.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const media = getModalMedia();
+        if (!media) return;
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newScale = Math.min(Math.max(0.5, currentScale + delta), 5);
+        if (newScale !== currentScale) {
+            currentScale = newScale;
+            updateTransform(media);
+            zoomInfo.textContent = Math.round(currentScale * 100) + '%';
+        }
+    }, { passive: false });
+
+    imageModalWrapper.addEventListener('dblclick', () => {
+        const media = getModalMedia();
+        if (!media) return;
+        currentScale = 0.5;
+        translateX = 0;
+        translateY = 0;
+        updateTransform(media);
+        zoomInfo.textContent = '50%';
+    });
+
+    imageModalWrapper.addEventListener('mousedown', (e) => {
+        const media = getModalMedia();
+        if (!media) return;
+        if (currentScale <= 0.5) return;
+        if (media.tagName === 'VIDEO' && !media.paused && !media.ended) {
+            if (e.target.tagName === 'VIDEO') return;
+        }
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        lastTranslateX = translateX;
+        lastTranslateY = translateY;
+        media.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const media = getModalMedia();
+        if (!media) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        translateX = lastTranslateX + dx;
+        translateY = lastTranslateY + dy;
+        updateTransform(media);
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            const media = getModalMedia();
+            if (media) media.style.cursor = 'grab';
+        }
+    });
+
+    let touchStartX = 0, touchStartY = 0;
+    let touchLastTranslateX = 0, touchLastTranslateY = 0;
+    let isTouching = false;
+
+    imageModalWrapper.addEventListener('touchstart', (e) => {
+        const media = getModalMedia();
+        if (!media) return;
+        if (e.touches.length === 1 && currentScale > 0.5) {
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchLastTranslateX = translateX;
+            touchLastTranslateY = translateY;
+            isTouching = true;
+        }
+    }, { passive: true });
+
+    imageModalWrapper.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && isTouching) {
+            const touch = e.touches[0];
+            const dx = touch.clientX - touchStartX;
+            const dy = touch.clientY - touchStartY;
+            translateX = touchLastTranslateX + dx;
+            translateY = touchLastTranslateY + dy;
+            const media = getModalMedia();
+            if (media) updateTransform(media);
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    imageModalWrapper.addEventListener('touchend', () => {
+        isTouching = false;
+    });
+
+    imageModal.addEventListener('click', (e) => {
+        if (e.target !== modalMedia) closeImageModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (imageModal.classList.contains('active')) {
+            closeImageModal();
+            return;
+        }
+        if (historyDetailModal.classList.contains('active')) {
+            historyDetailModal.classList.remove('active');
+            updateBodyModalLock();
+        }
+    });
+
+    function setupMediaClick(container) {
+        container.addEventListener('click', (e) => {
+            const media = e.target.closest('img');
+            if (!media || !container.contains(media)) return;
+
+            const originalUrl = media.dataset.originalUrl || '';
+            if (originalUrl && !isVideo(originalUrl)) {
+                openImageModal(originalUrl);
+            }
+        });
+    }
+
+    setupMediaClick(previewContainer);
+    setupMediaClick(manualPreviewContainer);
+
+    function displayPreview(container, imageUrl, showLoader = false) {
+        if (showLoader) {
+            showSpinner(container);
+            return;
+        }
+
+        container.textContent = '';
+
+        if (!imageUrl) {
+            setPlaceholder(container, currentLocale.previewPlaceholder);
+            return;
+        }
+
+        const isVideoFile = isVideo(imageUrl);
+        const media = document.createElement(isVideoFile ? 'video' : 'img');
+
+        media.src = '/api/image?url=' + encodeURIComponent(imageUrl);
+        media.style.maxWidth = '100%';
+        media.style.maxHeight = '520px';
+        media.style.borderRadius = '8px';
+        media.dataset.originalUrl = imageUrl;
+
+        if (isVideoFile) {
+            media.controls = true;
+            media.preload = 'metadata';
+            media.playsInline = true;
+            media.style.cursor = 'default';
+
+            container.appendChild(media);
+
+            media.onerror = () => {
+                setPlaceholder(container, currentLocale.videoLoadError);
+                container.firstChild.style.color = '#ff6b8a';
+            };
+        } else {
+            media.alt = 'Preview';
+            media.draggable = false;
+            media.style.cursor = 'zoom-in';
+            media.onerror = () => {
+                setPlaceholder(container, currentLocale.previewLoadError);
+                container.firstChild.style.color = '#ff6b8a';
+            };
+            container.appendChild(media);
+        }
+    }
+
+    function parseGelbooruXML(xmlText) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, 'text/xml');
+        const posts = doc.getElementsByTagName('post');
+        if (posts.length === 0) return null;
+        const post = posts[0];
+        const getAttr = (name) => post.getAttribute(name) || '';
+        const getChild = (name) => {
+            const el = post.getElementsByTagName(name);
+            return el.length ? el[0].textContent : '';
+        };
+        const id = getAttr('id') || getChild('id');
+        const file_url = getAttr('file_url') || getChild('file_url');
+        const tags = getAttr('tags') || getChild('tags');
+        return {
+            id: id,
+            file_url: file_url,
+            tags: tags ? tags.split(' ').filter(Boolean) : [],
+        };
+    }
+
+    function copyTags(text, buttonElement) {
+        if (!text || text === currentLocale.tagsPlaceholder) {
+            statusMsg.textContent = '❌ ' + currentLocale.noTagsToCopy;
+            setTimeout(() => statusMsg.textContent = '', 2000);
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                buttonElement.textContent = currentLocale.copiedBtn;
+                setTimeout(() => buttonElement.textContent = currentLocale.copyBtn, 5000);
+            }).catch(() => {
+                fallbackCopy(text, buttonElement);
+            });
+        } else {
+            fallbackCopy(text, buttonElement);
+        }
+    }
+
+    function fallbackCopy(text, buttonElement) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            if (buttonElement) {
+                buttonElement.textContent = currentLocale.copiedBtn;
+                setTimeout(() => buttonElement.textContent = currentLocale.copyBtn, 5000);
+            }
+        } catch (e) {
+            statusMsg.textContent = '❌ ' + currentLocale.noTagsToCopy;
+        }
+        document.body.removeChild(textarea);
+    }
+
+    function displayPostData(tagsStr, postUrl, imageUrl, id) {
+        tagsDisplay.textContent = tagsStr || currentLocale.tagsPlaceholder;
+        urlDisplay.textContent = postUrl || '';
+        if (postUrl) {
+            urlDisplay.style.cursor = 'pointer';
+            urlDisplay.onclick = () => window.open(postUrl, '_blank', 'noopener,noreferrer');
+        } else {
+            urlDisplay.style.cursor = 'default';
+            urlDisplay.onclick = null;
+        }
+        displayPreview(previewContainer, imageUrl);
+        statusMsg.textContent = currentLocale.statusSuccess;
+        statusMsg.style.color = '#51cf66';
+        saveCachedPost({ tags: tagsStr, imageUrl: imageUrl, postUrl: postUrl, id: id });
+    }
+
+    function getAuthHeaders() {
+        const headers = {};
+        if (adminPassword) headers['X-Admin-Password'] = adminPassword;
+        return headers;
+    }
+
+    async function saveTagsOnly(include, exclude) {
+        if (tagSaveAbortController) tagSaveAbortController.abort();
+        const controller = new AbortController();
+        tagSaveAbortController = controller;
+        try {
+            const resp = await fetch('/api/tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ include_tags: include, exclude_tags: exclude }),
+                signal: controller.signal
+            });
+            if (!resp.ok) throw new Error('Save tags failed');
+            return true;
+        } catch (e) {
+            if (e.name === 'AbortError') return false;
+            console.error('Ошибка сохранения тегов:', e);
+            return false;
+        } finally {
+            if (tagSaveAbortController === controller) tagSaveAbortController = null;
+        }
+    }
+
+    async function saveFullConfig(newConfig) {
+        try {
+            const resp = await fetch('/api/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify(newConfig)
+            });
+            if (resp.status === 403) {
+                throw new Error('Forbidden');
+            }
+            if (!resp.ok) throw new Error('Save failed');
+            config = newConfig;
+            return true;
+        } catch (e) {
+            console.error('Ошибка сохранения', e);
+            return false;
+        }
+    }
+
+    function autoSaveTags() {
+        if (!isReady) return;
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            const include = includeTags.value.trim();
+            const exclude = excludeTags.value.trim();
+            saveTagsOnly(include, exclude);
+        }, 700);
+    }
+
+    async function loadConfig(requireAuth = false) {
+        try {
+            const headers = {};
+            if (requireAuth && adminPassword) {
+                headers['X-Admin-Password'] = adminPassword;
+            }
+            const resp = await fetch('/api/config', { headers });
+            if (resp.status === 403) throw new Error('Forbidden');
+            if (!resp.ok) throw new Error('Failed to load config');
+            const data = await resp.json();
+
+            replaceUnderscores.checked = data.replace_underscores !== undefined ? data.replace_underscores : true;
+            exclusionList.value = data.exclusion_list || '0_0,(o)_(o),+_+,+_-,._.,<o>_<o>,<|>_<|>,=_=,>_<,3_3,6_9,>_o,@_@,^_^,o_o,u_u,x_x,|_|,||_||';
+            ignoreTags.value = data.ignore_tags || '';
+            languageSelect.value = data.language || 'ru';
+            includeTags.value = data.include_tags || '';
+            excludeTags.value = data.exclude_tags || '';
+            currentLang = data.language || 'ru';
+            config = { ...config, ...data };
+            applyLocale(currentLang);
+            updateSeenCount();
+
+            if (requireAuth) {
+                apiKey.value = data.api_key || '';
+                userId.value = data.user_id || '';
+                proxyEnabled.checked = data.proxy_enabled || false;
+                proxyUrl.value = data.proxy_url || '';
+                isAuthorized = true;
+            }
+            return true;
+        } catch (e) {
+            if (e.message === 'Forbidden') {
+                isAuthorized = false;
+                adminPassword = null;
+                try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (ignore) {}
+            }
+            settingsStatus.textContent = e.message === 'Forbidden'
+                ? currentLocale.settingsLoadError + ' (неверный пароль)'
+                : currentLocale.settingsLoadError;
+            settingsStatus.style.color = '#ff6b6b';
+            return false;
+        }
+    }
+
+    async function saveConfig() {
+        const newConfig = {
+            api_key: apiKey.value.trim(),
+            user_id: userId.value.trim(),
+            replace_underscores: replaceUnderscores.checked,
+            exclusion_list: exclusionList.value.trim(),
+            ignore_tags: ignoreTags.value.trim(),
+            language: languageSelect.value,
+            proxy_enabled: proxyEnabled.checked,
+            proxy_url: proxyUrl.value.trim(),
+            include_tags: includeTags.value.trim(),
+            exclude_tags: excludeTags.value.trim()
+        };
+        const success = await saveFullConfig(newConfig);
+        if (success) {
+            settingsStatus.textContent = currentLocale.settingsSaved;
+            settingsStatus.style.color = '#51cf66';
+        } else {
+            settingsStatus.textContent = currentLocale.settingsSaveError;
+            settingsStatus.style.color = '#ff6b6b';
+        }
+    }
+
+    async function fetchRandomPost(include, exclude) {
+        if (isLoading) return;
+        isLoading = true;
+        randomBtn.disabled = true;
+        randomBtn.textContent = currentLocale.loadingBtn;
+        statusMsg.textContent = currentLocale.statusLoading;
+        statusMsg.style.color = '#ffaa66';
+        showSpinner(previewContainer);
+        try {
+            const resp = await fetch('/api/random', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ include, exclude })
+            });
+            if (!resp.ok) {
+                let errorMsg = currentLocale.statusError;
+                try {
+                    const errData = await resp.json();
+                    if (errData.error) errorMsg = errData.error;
+                    if (resp.status === 404 && errData.error === 'Все доступные посты уже просмотрены') {
+                        errorMsg = currentLocale.statusAllSeen;
+                    }
+                } catch (e) {}
+                throw new Error(errorMsg);
+            }
+            const xml = await resp.text();
+            const data = parseGelbooruXML(xml);
+            if (!data || !data.id) {
+                statusMsg.textContent = currentLocale.statusNoPost;
+                statusMsg.style.color = '#ff6b6b';
+                tagsDisplay.textContent = currentLocale.tagsPlaceholder;
+                urlDisplay.textContent = '';
+                displayPreview(previewContainer, null);
+                clearCachedPost();
+                return;
+            }
+            let tags = data.tags;
+            const ignoreList = config.ignore_tags ? config.ignore_tags.split(',').map(t => t.trim().replace(/ /g, '_').toLowerCase()) : [];
+            if (ignoreList.length) {
+                tags = tags.filter(t => !ignoreList.includes(t.toLowerCase().replace(/ /g, '_')));
+            }
+            if (config.replace_underscores !== false) {
+                const exclusionArr = config.exclusion_list ? config.exclusion_list.split(',').map(t => t.trim()) : [];
+                tags = tags.map(t => {
+                    if (exclusionArr.includes(t)) return t;
+                    return t.replace(/_/g, ' ');
+                });
+            }
+            const tagsStr = tags.join(', ');
+            const postUrl = 'https://gelbooru.com/index.php?page=post&s=view&id=' + data.id;
+            displayPostData(tagsStr, postUrl, data.file_url, data.id);
+            updateSeenCount();
+        } catch (e) {
+            console.error(e);
+            statusMsg.textContent = currentLocale.statusError + ': ' + e.message;
+            statusMsg.style.color = '#ff6b6b';
+            displayPreview(previewContainer, null);
+            clearCachedPost();
+        } finally {
+            isLoading = false;
+            randomBtn.disabled = false;
+            randomBtn.textContent = currentLocale.randomBtn;
+        }
+    }
+
+    async function fetchPostById(id) {
+        manualStatusMsg.textContent = currentLocale.statusLoading;
+        manualStatusMsg.style.color = '#ffaa66';
+        showSpinner(manualPreviewContainer);
+        try {
+            const resp = await fetch('/api/post', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            if (!resp.ok) {
+                const errData = await resp.json();
+                throw new Error(errData.error || 'Server error');
+            }
+            const xml = await resp.text();
+            const data = parseGelbooruXML(xml);
+            if (!data || !data.id) {
+                manualStatusMsg.textContent = currentLocale.statusNoPost;
+                manualStatusMsg.style.color = '#ff6b6b';
+                manualTagsDisplay.textContent = currentLocale.tagsPlaceholder;
+                manualUrlDisplay.textContent = '';
+                displayPreview(manualPreviewContainer, null);
+                return;
+            }
+            let tags = data.tags;
+            const ignoreList = config.ignore_tags ? config.ignore_tags.split(',').map(t => t.trim().replace(/ /g, '_').toLowerCase()) : [];
+            if (ignoreList.length) {
+                tags = tags.filter(t => !ignoreList.includes(t.toLowerCase().replace(/ /g, '_')));
+            }
+            if (config.replace_underscores !== false) {
+                const exclusionArr = config.exclusion_list ? config.exclusion_list.split(',').map(t => t.trim()) : [];
+                tags = tags.map(t => {
+                    if (exclusionArr.includes(t)) return t;
+                    return t.replace(/_/g, ' ');
+                });
+            }
+            const tagsStr = tags.join(', ');
+            const postUrl = 'https://gelbooru.com/index.php?page=post&s=view&id=' + data.id;
+            manualTagsDisplay.textContent = tagsStr || currentLocale.tagsPlaceholder;
+            manualUrlDisplay.textContent = postUrl;
+            if (postUrl) {
+                manualUrlDisplay.style.cursor = 'pointer';
+                manualUrlDisplay.onclick = () => window.open(postUrl, '_blank', 'noopener,noreferrer');
+            } else {
+                manualUrlDisplay.style.cursor = 'default';
+                manualUrlDisplay.onclick = null;
+            }
+            displayPreview(manualPreviewContainer, data.file_url);
+            manualStatusMsg.textContent = currentLocale.statusSuccess;
+            manualStatusMsg.style.color = '#51cf66';
+        } catch (e) {
+            console.error(e);
+            manualStatusMsg.textContent = currentLocale.statusError + ': ' + e.message;
+            manualStatusMsg.style.color = '#ff6b6b';
+            displayPreview(manualPreviewContainer, null);
+        }
+    }
+
+    function showPasswordModal() {
+        passwordModal.classList.add('active');
+        passwordInput.value = '';
+        passwordError.textContent = '';
+        setTimeout(() => passwordInput.focus(), 100);
+    }
+
+    function hidePasswordModal() {
+        passwordModal.classList.remove('active');
+    }
+
+    passwordCancel.addEventListener('click', () => {
+        pendingAfterAuth = null;
+        hidePasswordModal();
+    });
+    passwordModal.addEventListener('click', (e) => {
+        if (e.target === passwordModal) {
+            pendingAfterAuth = null;
+            hidePasswordModal();
+        }
+    });
+
+    passwordSubmit.addEventListener('click', async () => {
+        const pwd = passwordInput.value.trim();
+        if (!pwd) {
+            passwordError.textContent = currentLocale.passwordRequired;
+            return;
+        }
+        try {
+            const resp = await fetch('/api/config', {
+                headers: { 'X-Admin-Password': pwd }
+            });
+            if (resp.status === 403) {
+                passwordError.textContent = currentLocale.passwordError;
+                return;
+            }
+            if (!resp.ok) {
+                passwordError.textContent = currentLocale.settingsLoadError;
+                return;
+            }
+            adminPassword = pwd;
+            localStorage.setItem(AUTH_STORAGE_KEY, pwd);
+            isAuthorized = true;
+            hidePasswordModal();
+            await loadConfig(true);
+
+            if (pendingAfterAuth) {
+                const cb = pendingAfterAuth;
+                pendingAfterAuth = null;
+                cb();
+                return;
+            }
+            tabs.forEach(t => t.classList.remove('active'));
+            document.querySelector('[data-tab="settings"]').classList.add('active');
+            tabContents.main.classList.remove('active');
+            tabContents.settings.classList.add('active');
+        } catch (e) {
+            passwordError.textContent = currentLocale.settingsLoadError;
+        }
+    });
+
+    passwordInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            passwordSubmit.click();
+        }
+        if (e.key === 'Escape') {
+            pendingAfterAuth = null;
+            hidePasswordModal();
+        }
+    });
+
+    copyTagsBtn.addEventListener('click', () => {
+        const text = tagsDisplay.textContent;
+        copyTags(text, copyTagsBtn);
+    });
+
+    copyManualTagsBtn.addEventListener('click', () => {
+        const text = manualTagsDisplay.textContent;
+        copyTags(text, copyManualTagsBtn);
+    });
+
+    includeTags.addEventListener('input', autoSaveTags);
+    excludeTags.addEventListener('input', autoSaveTags);
+
+    randomBtn.addEventListener('click', () => {
+        const include = includeTags.value.trim();
+        const exclude = excludeTags.value.trim();
+        fetchRandomPost(include, exclude);
+    });
+
+    clearBtn.addEventListener('click', () => {
+        tagsDisplay.textContent = currentLocale.tagsPlaceholder;
+        urlDisplay.textContent = '';
+        displayPreview(previewContainer, null);
+        statusMsg.textContent = '';
+        clearCachedPost();
+    });
+
+    loadPostBtn.addEventListener('click', () => {
+        const input = postIdInput.value.trim();
+        let id = null;
+        const match = input.match(/id=(\d+)/);
+        if (match) {
+            id = parseInt(match[1]);
+        } else if (/^\d+$/.test(input)) {
+            id = parseInt(input);
+        }
+        if (id) {
+            fetchPostById(id);
+        } else {
+            manualStatusMsg.textContent = currentLocale.statusError + ': ' + currentLocale.invalidId;
+            manualStatusMsg.style.color = '#ff6b6b';
+        }
+    });
+
+    saveSettingsBtn.addEventListener('click', saveConfig);
+
+    async function init() {
+        await loadConfig(false);
+        if (adminPassword) {
+            await loadConfig(true);
+        }
+        const cached = loadCachedPost();
+        if (cached && cached.imageUrl) {
+            displayPostData(cached.tags || '', cached.postUrl || '', cached.imageUrl, cached.id || '');
+        }
+        restoreTab();
+        isReady = true;
+        if (document.getElementById('tab-history').classList.contains('active')) {
+            const savedPage = getSavedHistoryPage();
+            await loadHistory(savedPage);
+        }
+    }
+
+    init();
 </script>
 </body>
 </html>

@@ -17,7 +17,7 @@ const DB_FILE = path.join(DATA_DIR, 'database.sqlite');
 const FAVICON_FILE = path.join(DATA_DIR, 'favicon.png');
 const INDEX_FILE = path.join(PUBLIC_DIR, 'index.html');
 
-const ADMIN_PASSWORD = 'PASSWORD';
+const ADMIN_PASSWORD = '0000';
 
 const DEFAULT_CONFIG = Object.freeze({
     api_key: '',
@@ -33,15 +33,18 @@ const DEFAULT_CONFIG = Object.freeze({
 });
 
 const CONFIG_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
-const UPSTREAM_TIMEOUT_MS = 15000;
+const UPSTREAM_TIMEOUT_MS = 20000;
+const MEDIA_TIMEOUT_MS = 30000;
 const PROXY_MAX_SOCKETS = 64;
 const PROXY_MAX_FREE_SOCKETS = 16;
 const MAX_XML_BYTES = 4 * 1024 * 1024;
-const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 60 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
 const MAX_JSON_BODY_BYTES = 64 * 1024;
 const MAX_RANDOM_ATTEMPTS = 30;
 const RANDOM_MAX_OFFSET = 20000;
 const HISTORY_PAGE_SIZE = 24;
+const SERVER_REQUEST_TIMEOUT_MS = 120000;
 
 for (const dir of [DATA_DIR, PUBLIC_DIR]) {
     fs.mkdirSync(dir, { recursive: true });
@@ -182,7 +185,13 @@ async function initDB() {
 
     const seenRows = await dbAll('SELECT id FROM seen_posts');
     seenIds = new Set(seenRows.map(row => String(row.id)));
-    await purgeInvalidHistory();
+
+    const historyRows = await dbAll('SELECT post_id, file_url FROM history');
+    for (const row of historyRows) {
+        if (isVideoUrl(row.file_url)) {
+            await dbRun('DELETE FROM history WHERE post_id = ?', [String(row.post_id)]);
+        }
+    }
 }
 
 async function saveConfig(config) {
@@ -279,197 +288,262 @@ function getProxyAgent(proxyUrl) {
     return agent;
 }
 
-function requestRemote(inputUrl, proxyUrl, { asBuffer = false, maxBytes = MAX_XML_BYTES, redirects = 0 } = {}) {
+function requestRemote(inputUrl, proxyUrl, {
+    asBuffer = false,
+    maxBytes = MAX_XML_BYTES,
+    redirects = 0,
+    range = null,
+    timeoutMs = UPSTREAM_TIMEOUT_MS
+} = {}) {
     const parsed = isAllowedRemoteUrl(inputUrl);
     if (!parsed) return Promise.reject(new Error('Разрешены только HTTPS-URL с домена gelbooru.com'));
+    if (redirects > 3) return Promise.reject(new Error('Слишком много перенаправлений'));
 
     return new Promise((resolve, reject) => {
         let settled = false;
-        const finishReject = (err) => {
+        const fail = (err) => {
             if (settled) return;
             settled = true;
             reject(err);
         };
-        const finishResolve = (value) => {
-            if (settled) return;
-            settled = true;
-            resolve(value);
-        };
-        const options = {
+
+        const req = https.request({
             protocol: parsed.protocol,
             hostname: parsed.hostname,
             port: parsed.port || 443,
             path: parsed.pathname + parsed.search,
             method: 'GET',
             agent: proxyUrl ? getProxyAgent(proxyUrl) : upstreamAgent,
-            timeout: UPSTREAM_TIMEOUT_MS,
+            timeout: timeoutMs,
             headers: {
                 'User-Agent': 'Gelbooru-Prompt-App/2.0',
                 'Referer': 'https://gelbooru.com/',
                 'Accept': asBuffer
                     ? 'image/avif,image/webp,image/apng,image/jpeg,image/png,image/gif,video/mp4,video/webm,video/ogg,video/quicktime,*/*;q=0.8'
                     : 'application/xml,text/xml;q=0.9,*/*;q=0.1',
-                'Connection': 'keep-alive'
+                'Connection': 'keep-alive',
+                ...(range ? { Range: range } : {})
             }
-        };
-        const req = https.request(options, res => {
-            const status = res.statusCode || 0;
-            if (status >= 300 && status < 400 && res.headers.location && redirects < 3) {
-                res.resume();
-                const next = new url.URL(res.headers.location, parsed).toString();
-                requestRemote(next, proxyUrl, { asBuffer, maxBytes, redirects: redirects + 1 }).then(finishResolve, finishReject);
+        }, remote => {
+            const status = remote.statusCode || 0;
+
+            if (status >= 300 && status < 400 && remote.headers.location) {
+                if (redirects >= 3) {
+                    remote.resume();
+                    fail(new Error('Слишком много перенаправлений'));
+                    return;
+                }
+                remote.resume();
+                const next = new url.URL(remote.headers.location, parsed).toString();
+                requestRemote(next, proxyUrl, { asBuffer, maxBytes, redirects: redirects + 1, range, timeoutMs })
+                    .then(resolve, fail);
                 return;
             }
-            if (status !== 200) {
-                res.resume();
-                finishReject(new Error(`Удалённый сервер ответил с кодом ${status}`));
+
+            if (status < 200 || status >= 300) {
+                remote.resume();
+                fail(new Error(`Удалённый сервер ответил с кодом ${status}`));
                 return;
             }
-            let size = 0;
+
+            const contentType = String(remote.headers['content-type'] || '')
+                .split(';')[0].trim().toLowerCase();
+            const declaredLength = Number(remote.headers['content-length']);
+
+            if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+                remote.resume();
+                fail(new Error('Удалённый ответ слишком большой'));
+                return;
+            }
+
             const chunks = [];
-            let tooLarge = false;
-            res.on('data', chunk => {
-                if (settled || tooLarge) return;
+            let size = 0;
+            remote.on('data', chunk => {
+                if (settled) return;
                 size += chunk.length;
                 if (size > maxBytes) {
-                    tooLarge = true;
-                    res.destroy();
-                    req.destroy();
-                    finishReject(new Error('Удалённый ответ слишком большой'));
+                    const err = new Error('Удалённый ответ слишком большой');
+                    remote.destroy(err);
+                    fail(err);
                     return;
                 }
                 chunks.push(chunk);
             });
-            res.on('end', () => {
-                if (settled || tooLarge) return;
-                finishResolve({
+
+            remote.on('end', () => {
+                if (settled) return;
+                settled = true;
+                resolve({
                     buffer: Buffer.concat(chunks),
-                    contentType: res.headers['content-type'] || (asBuffer ? 'application/octet-stream' : 'text/xml; charset=utf-8')
+                    contentType: contentType || (asBuffer ? 'application/octet-stream' : 'text/xml; charset=utf-8'),
+                    statusCode: status,
+                    contentLength: Number.isFinite(declaredLength) ? declaredLength : null
                 });
             });
-            res.on('error', finishReject);
+            remote.on('error', fail);
         });
-        req.setTimeout(UPSTREAM_TIMEOUT_MS, () => req.destroy(new Error('Таймаут запроса к удалённому серверу')));
-        req.on('error', finishReject);
+
+        req.setTimeout(timeoutMs, () => req.destroy(new Error('Таймаут запроса к удалённому серверу')));
+        req.on('error', fail);
         req.end();
     });
 }
 
-function streamRemote(inputUrl, proxyUrl, res, { maxBytes = MAX_IMAGE_BYTES, redirects = 0, range = '' } = {}) {
+
+function streamRemote(inputUrl, proxyUrl, res, {
+    maxBytes = MAX_MEDIA_BYTES,
+    redirects = 0,
+    requestHeaders = {}
+} = {}) {
     const parsed = isAllowedRemoteUrl(inputUrl);
     if (!parsed) return Promise.reject(new Error('Разрешены только HTTPS-URL с домена gelbooru.com'));
+    if (redirects > 3) return Promise.reject(new Error('Слишком много перенаправлений'));
 
     return new Promise((resolve, reject) => {
-        let settled = false;
-        let started = false;
-        let remoteRequest;
-        const finishReject = (err) => {
-            if (settled) return;
-            settled = true;
+        let finished = false;
+        let responseHasStarted = false;
+
+        const fail = (err) => {
+            if (finished) return;
+            finished = true;
             reject(err);
         };
-        const finishResolve = () => {
-            if (settled) return;
-            settled = true;
-            resolve();
-        };
-        const options = {
+
+        const req = https.request({
             protocol: parsed.protocol,
             hostname: parsed.hostname,
             port: parsed.port || 443,
             path: parsed.pathname + parsed.search,
             method: 'GET',
             agent: proxyUrl ? getProxyAgent(proxyUrl) : upstreamAgent,
-            timeout: UPSTREAM_TIMEOUT_MS,
+            timeout: MEDIA_TIMEOUT_MS,
             headers: {
                 'User-Agent': 'Gelbooru-Prompt-App/2.0',
                 'Referer': 'https://gelbooru.com/',
                 'Accept': 'image/avif,image/webp,image/apng,image/jpeg,image/png,image/gif,video/mp4,video/webm,video/ogg,video/quicktime,*/*;q=0.8',
                 'Connection': 'keep-alive',
-                ...(range ? { Range: range } : {})
+                ...(requestHeaders.range ? { Range: requestHeaders.range } : {})
             }
-        };
-        remoteRequest = https.request(options, remote => {
+        }, remote => {
             const status = remote.statusCode || 0;
-            if (status >= 300 && status < 400 && remote.headers.location && redirects < 3) {
+
+            if (status >= 300 && status < 400 && remote.headers.location) {
+                if (redirects >= 3) {
+                    remote.resume();
+                    fail(new Error('Слишком много перенаправлений'));
+                    return;
+                }
                 remote.resume();
                 const next = new url.URL(remote.headers.location, parsed).toString();
-                streamRemote(next, proxyUrl, res, { maxBytes, redirects: redirects + 1, range }).then(finishResolve, finishReject);
+                streamRemote(next, proxyUrl, res, {
+                    maxBytes,
+                    redirects: redirects + 1,
+                    requestHeaders
+                }).then(resolve, reject);
                 return;
             }
-            if (status !== 200 && status !== 206) {
+
+            if (status < 200 || status >= 300) {
                 remote.resume();
-                finishReject(new Error(`Удалённый сервер ответил с кодом ${status}`));
+                fail(new Error(`Удалённый сервер ответил с кодом ${status}`));
                 return;
             }
-            const contentType = String(remote.headers['content-type'] || '').split(';')[0].toLowerCase();
-            const allowedTypes = /^(image\/(jpeg|png|gif|webp|avif)|video\/(mp4|webm|ogg|quicktime))$/;
+
+            const contentType = String(remote.headers['content-type'] || '')
+                .split(';')[0].trim().toLowerCase();
+            const allowedTypes = /^(image\/(jpeg|png|gif|webp|avif|bmp)|video\/(mp4|webm|ogg|quicktime|x-msvideo))$/;
+
             if (!allowedTypes.test(contentType)) {
                 remote.resume();
-                finishReject(new Error('Удалённый ресурс не является поддерживаемым изображением или видео'));
+                fail(new Error('Удалённый ресурс не является поддерживаемым изображением или видео'));
                 return;
             }
+
             const declaredLength = Number(remote.headers['content-length']);
             if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
                 remote.resume();
-                finishReject(new Error('Удалённый ответ слишком большой'));
+                fail(new Error('Удалённый ответ слишком большой'));
                 return;
             }
+
+            if (!res.headersSent && !res.destroyed) {
+                res.writeHead(status === 206 ? 206 : 200, {
+                    'Content-Type': contentType,
+                    'Cache-Control': 'public, max-age=86400',
+                    'X-Content-Type-Options': 'nosniff',
+                    'Accept-Ranges': 'bytes',
+                    ...(Number.isFinite(declaredLength) ? { 'Content-Length': String(declaredLength) } : {}),
+                    ...(remote.headers['content-range'] ? { 'Content-Range': String(remote.headers['content-range']) } : {})
+                });
+                responseHasStarted = true;
+            }
+
             let size = 0;
-            let finished = false;
             remote.on('data', chunk => {
                 if (finished) return;
                 size += chunk.length;
                 if (size > maxBytes) {
                     finished = true;
-                    remote.destroy();
-                    if (!res.destroyed) res.destroy(new Error('Удалённый ответ слишком большой'));
+                    remote.destroy(new Error('Удалённый ответ слишком большой'));
+                    if (!res.destroyed) res.destroy();
                 }
             });
+
             remote.on('error', err => {
-                if (finished || res.destroyed) return;
+                if (finished) return;
                 finished = true;
-                if (started) {
-                    res.destroy(err);
-                } else {
-                    finishReject(err);
-                }
+                if (!res.destroyed) res.destroy();
+                if (responseHasStarted || res.headersSent) resolve();
+                else reject(err);
             });
-            const responseHeaders = {
-                'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=86400',
-                'X-Content-Type-Options': 'nosniff',
-                ...(status === 206 ? { 'Accept-Ranges': 'bytes' } : {}),
-                ...(Number.isFinite(declaredLength) ? { 'Content-Length': String(declaredLength) } : {}),
-                ...(remote.headers['content-range'] ? { 'Content-Range': String(remote.headers['content-range']) } : {}),
-                ...(remote.headers['accept-ranges'] ? { 'Accept-Ranges': String(remote.headers['accept-ranges']) } : {})
-            };
-            if (res.headersSent || res.writableEnded || res.destroyed) {
-                remote.destroy();
-                return;
-            }
-            res.writeHead(status, responseHeaders);
-            started = true;
-            remote.pipe(res);
+
             remote.on('end', () => {
+                if (finished) return;
                 finished = true;
-                finishResolve();
+                resolve();
             });
+
+            remote.pipe(res);
         });
-        remoteRequest.setTimeout(UPSTREAM_TIMEOUT_MS, () => remoteRequest.destroy(new Error('Таймаут запроса к удалённому серверу')));
-        remoteRequest.on('error', finishReject);
-        remoteRequest.end();
+
+        req.setTimeout(MEDIA_TIMEOUT_MS, () => req.destroy(new Error('Таймаут запроса к удалённому серверу')));
+        req.on('error', err => {
+            if (finished) return;
+            if (responseHasStarted || res.headersSent) {
+                finished = true;
+                if (!res.destroyed) res.destroy(err);
+                resolve();
+            } else {
+                fail(err);
+            }
+        });
+        req.end();
     });
 }
 
-async function fetchWithRetry(inputUrl, proxyUrl, { asBuffer = false, retries = 3, delay = 600, maxBytes } = {}) {
+
+async function fetchWithRetry(inputUrl, proxyUrl, {
+    asBuffer = false,
+    retries = 3,
+    delay = 600,
+    maxBytes,
+    timeoutMs = UPSTREAM_TIMEOUT_MS,
+    range = null
+} = {}) {
     let lastError;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            return await requestRemote(inputUrl, proxyUrl, { asBuffer, maxBytes });
+            return await requestRemote(inputUrl, proxyUrl, {
+                asBuffer,
+                maxBytes,
+                timeoutMs,
+                range
+            });
         } catch (e) {
             lastError = e;
-            if (attempt < retries) await new Promise(resolve => setTimeout(resolve, delay * attempt));
+            if (attempt < retries) {
+                await new Promise(resolve => setTimeout(resolve, delay * attempt));
+            }
         }
     }
     throw lastError || new Error('Удалённый запрос не выполнен');
@@ -485,23 +559,6 @@ async function claimSeenId(id) {
     }
     seenIds.add(normalized);
     return false;
-}
-
-function isVideoUrl(fileUrl) {
-    try {
-        const parsed = new url.URL(fileUrl);
-        return /\.(mp4|webm|ogg|ogv|mov|m4v)(?:$|\?)/i.test(parsed.pathname);
-    } catch {
-        return /\.(mp4|webm|ogg|ogv|mov|m4v)(?:$|\?)/i.test(String(fileUrl || ''));
-    }
-}
-
-function isImageContentType(contentType) {
-    return /^image\/(jpeg|png|gif|webp|avif)$/i.test(String(contentType || '').split(';')[0]);
-}
-
-async function purgeInvalidHistory() {
-    await dbRun(`DELETE FROM history WHERE image_data IS NULL OR length(image_data) = 0 OR lower(file_url) LIKE '%.mp4' OR lower(file_url) LIKE '%.webm' OR lower(file_url) LIKE '%.ogg' OR lower(file_url) LIKE '%.ogv' OR lower(file_url) LIKE '%.mov' OR lower(file_url) LIKE '%.m4v'`);
 }
 
 async function findRandomPost(includeTags, excludeTags, cfg) {
@@ -522,7 +579,7 @@ async function findRandomPost(includeTags, excludeTags, cfg) {
     const proxyUrl = cfg.proxy_enabled ? cfg.proxy_url : null;
 
     const countUrl = buildGelbooruUrl('post', { ...auth, limit: 1, pid: 0, ...(tagStr ? { tags: tagStr } : {}) });
-    const countXml = await fetchWithRetry(countUrl, proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES });
+    const countXml = await fetchWithRetry(countUrl, proxyUrl, { retries: 4, delay: 400, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
     const count = parsePostCount(countXml.buffer.toString('utf8'));
     if (count <= 0) return null;
 
@@ -531,9 +588,9 @@ async function findRandomPost(includeTags, excludeTags, cfg) {
         const pid = Math.floor(Math.random() * (maxOffset + 1));
         const postUrl = buildGelbooruUrl('post', { ...auth, limit: 1, pid, ...(tagStr ? { tags: tagStr } : {}) });
         try {
-            const result = await fetchWithRetry(postUrl, proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES });
+            const result = await fetchWithRetry(postUrl, proxyUrl, { retries: 3, delay: 350, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
             const post = parsePostsFromXML(result.buffer.toString('utf8'))[0];
-            if (!post?.id || !post?.file_url) continue;
+            if (!post?.id) continue;
             if (!seenIds.has(String(post.id)) && await claimSeenId(post.id)) return post;
         } catch (e) {
             console.warn('Ошибка запроса случайного поста:', e.message);
@@ -542,18 +599,42 @@ async function findRandomPost(includeTags, excludeTags, cfg) {
     return null;
 }
 
-async function savePostToHistory(postId, tags, fileUrl, proxyUrl) {
-    if (!postId || !fileUrl || isVideoUrl(fileUrl)) return;
+function getMediaExtension(inputUrl) {
     try {
-        const response = await fetchWithRetry(fileUrl, proxyUrl, { asBuffer: true, retries: 2, delay: 400, maxBytes: MAX_IMAGE_BYTES });
-        if (!isImageContentType(response.contentType)) return;
-        const compressed = await sharp(response.buffer)
+        return path.extname(new url.URL(inputUrl).pathname).replace('.', '').toLowerCase();
+    } catch {
+        return '';
+    }
+}
+
+function isVideoUrl(inputUrl) {
+    return ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v', 'avi'].includes(getMediaExtension(inputUrl));
+}
+
+async function savePostToHistory(postId, tags, fileUrl, proxyUrl) {
+    if (!postId || !fileUrl) return;
+    try {
+        if (isVideoUrl(fileUrl)) return;
+
+        const response = await fetchWithRetry(fileUrl, proxyUrl, {
+            asBuffer: true,
+            retries: 2,
+            delay: 500,
+            maxBytes: MAX_IMAGE_BYTES,
+            timeoutMs: MEDIA_TIMEOUT_MS
+        });
+
+        if (!String(response.contentType || '').startsWith('image/')) return;
+
+        const compressed = await sharp(response.buffer, { failOn: 'none' })
             .rotate()
             .resize({ width: 300, height: 300, fit: 'inside', withoutEnlargement: true })
             .jpeg({ quality: 68, progressive: true })
             .toBuffer();
+
         await dbRun(
-            `INSERT OR IGNORE INTO history(post_id, tags, file_url, image_data) VALUES(?, ?, ?, ?)`,
+            `INSERT INTO history(post_id, tags, file_url, image_data) VALUES(?, ?, ?, ?)
+             ON CONFLICT(post_id) DO UPDATE SET tags=excluded.tags, file_url=excluded.file_url, image_data=excluded.image_data`,
             [String(postId), String(tags || ''), String(fileUrl), compressed]
         );
     } catch (e) {
@@ -562,7 +643,6 @@ async function savePostToHistory(postId, tags, fileUrl, proxyUrl) {
 }
 
 function queueHistorySave(postId, tags, fileUrl, proxyUrl) {
-    if (isVideoUrl(fileUrl)) return historyWriteQueue;
     historyWriteQueue = historyWriteQueue
         .then(() => savePostToHistory(postId, tags, fileUrl, proxyUrl))
         .catch(() => {});
@@ -570,7 +650,6 @@ function queueHistorySave(postId, tags, fileUrl, proxyUrl) {
 }
 
 async function getHistoryPage(page = 1, limit = HISTORY_PAGE_SIZE) {
-    await purgeInvalidHistory();
     const safeLimit = Math.min(Math.max(Number(limit) || HISTORY_PAGE_SIZE, 1), 50);
     const totalRow = await dbGet('SELECT COUNT(*) AS count FROM history');
     const total = Number(totalRow?.count || 0);
@@ -585,13 +664,13 @@ async function getHistoryPage(page = 1, limit = HISTORY_PAGE_SIZE) {
 }
 
 async function getHistoryPost(postId) {
-    const post = await dbGet('SELECT post_id, tags, file_url, image_data, created_at FROM history WHERE post_id = ?', [String(postId)]);
-    if (!post) return null;
-    if (!post.image_data || isVideoUrl(post.file_url)) {
-        await deleteHistoryPost(postId);
+    const row = await dbGet('SELECT post_id, tags, file_url, image_data, created_at FROM history WHERE post_id = ?', [String(postId)]);
+    if (!row) return null;
+    if (!row.image_data || isVideoUrl(row.file_url)) {
+        await dbRun('DELETE FROM history WHERE post_id = ?', [String(postId)]);
         return null;
     }
-    return post;
+    return row;
 }
 
 async function clearHistory() {
@@ -696,7 +775,7 @@ async function handleApi(req, res, parsedUrl) {
         try {
             const post = await getHistoryPost(postId);
             if (!post) json(res, 404, { error: 'Пост не найден' });
-            else json(res, 200, { ...post, image_data: post.image_data.toString('base64') });
+            else json(res, 200, { ...post, image_data: post.image_data ? post.image_data.toString('base64') : null });
         } catch (e) {
             json(res, 500, { error: e.message });
         }
@@ -741,8 +820,7 @@ async function handleApi(req, res, parsedUrl) {
             });
             res.end(post.image_data);
         } catch (e) {
-            if (!res.headersSent) text(res, 500, 'Internal Server Error');
-            else if (!res.destroyed) res.destroy(e);
+            text(res, 500, 'Internal Server Error');
         }
         return true;
     }
@@ -756,13 +834,18 @@ async function handleApi(req, res, parsedUrl) {
                 return true;
             }
             const proxyUrl = configCache.proxy_enabled ? configCache.proxy_url : null;
-            queueHistorySave(post.id, post.tags, post.file_url, proxyUrl);
+            if (!isVideoUrl(post.file_url)) queueHistorySave(post.id, post.tags, post.file_url, proxyUrl);
             const escaped = (value) => String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const xml = `<?xml version="1.0" encoding="UTF-8"?><posts limit="1" offset="0" count="1"><post id="${escaped(post.id)}" file_url="${escaped(post.file_url)}" tags="${escaped(post.tags)}"/></posts>`;
             text(res, 200, xml, 'application/xml; charset=utf-8');
         } catch (e) {
-            console.error('Ошибка в /api/random:', e.message);
-            if (!res.headersSent) json(res, 502, { error: e.message });
+            const message = e?.message || 'Ошибка удалённого сервера';
+            if (/Таймаут|Удалённый сервер/i.test(message)) {
+                console.warn('Не удалось получить случайный пост:', message);
+            } else {
+                console.error('Ошибка в /api/random:', message);
+            }
+            json(res, 502, { error: message });
         }
         return true;
     }
@@ -771,16 +854,16 @@ async function handleApi(req, res, parsedUrl) {
         try {
             const body = await readJsonBody(req);
             const id = Number(body.id);
-            if (!Number.isInteger(id) || id <= 0) throw new Error('ID не указан или некорректный');
+            if (!Number.isInteger(id) || id <= 0) throw new Error('ID не указан или некорректен');
             const params = { id };
             if (configCache.api_key) params.api_key = configCache.api_key;
             if (configCache.user_id) params.user_id = configCache.user_id;
             const proxyUrl = configCache.proxy_enabled ? configCache.proxy_url : null;
-            const result = await fetchWithRetry(buildGelbooruUrl('post', params), proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES });
+            const result = await fetchWithRetry(buildGelbooruUrl('post', params), proxyUrl, { retries: 2, delay: 300, maxBytes: MAX_XML_BYTES });
             text(res, 200, result.buffer.toString('utf8'), 'application/xml; charset=utf-8');
         } catch (e) {
             console.error('Ошибка в /api/post:', e.message);
-            if (!res.headersSent) json(res, 502, { error: e.message });
+            json(res, 502, { error: e.message });
         }
         return true;
     }
@@ -798,16 +881,19 @@ async function handleApi(req, res, parsedUrl) {
                 json(res, 400, { error: 'Недопустимый URL изображения' });
                 return true;
             }
-            await streamRemote(imageUrl, proxyUrl, res, {
-                maxBytes: MAX_IMAGE_BYTES,
-                range: String(req.headers.range || '')
+
+            await streamRemote(parsed.toString(), proxyUrl, res, {
+                maxBytes: MAX_MEDIA_BYTES,
+                requestHeaders: {
+                    range: req.headers.range || ''
+                }
             });
         } catch (e) {
             console.error('Ошибка загрузки изображения:', e.message);
             if (!res.headersSent && !res.writableEnded && !res.destroyed) {
                 json(res, 502, { error: e.message });
             } else if (!res.destroyed) {
-                res.destroy(e);
+                res.destroy();
             }
         }
         return true;
@@ -817,68 +903,63 @@ async function handleApi(req, res, parsedUrl) {
 }
 
 const server = http.createServer(async (req, res) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
     try {
-        req.setTimeout(120000);
-        res.setTimeout(120000);
-        const parsedUrl = new url.URL(req.url, `http://${req.headers.host || 'localhost'}`);
-        if (req.method === 'GET' && parsedUrl.pathname === '/') {
+        const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+        if (parsedUrl.pathname === '/' && req.method === 'GET') {
             res.writeHead(200, {
                 'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-store',
-                'X-Content-Type-Options': 'nosniff'
+                'Cache-Control': 'no-cache',
+                'Content-Length': Buffer.byteLength(indexHtml)
             });
             res.end(indexHtml);
             return;
         }
-        if (req.method === 'GET' && parsedUrl.pathname === '/favicon.ico') {
+
+        if (parsedUrl.pathname === '/favicon.ico' && req.method === 'GET') {
             if (!faviconBuffer) {
-                text(res, 404, 'Not found');
+                res.writeHead(404);
+                res.end();
                 return;
             }
             res.writeHead(200, {
                 'Content-Type': 'image/png',
-                'Cache-Control': 'public, max-age=86400',
-                'Content-Length': faviconBuffer.length,
-                'X-Content-Type-Options': 'nosniff'
+                'Cache-Control': 'public, max-age=604800, immutable',
+                'Content-Length': faviconBuffer.length
             });
             res.end(faviconBuffer);
             return;
         }
-        const handled = await handleApi(req, res, parsedUrl);
-        if (!handled && !res.headersSent && !res.writableEnded && !res.destroyed) {
-            json(res, 404, { error: 'Not found' });
-        }
+
+        if (await handleApi(req, res, parsedUrl)) return;
+        text(res, 404, 'Not Found');
     } catch (e) {
         console.error('Unhandled request error:', e);
-        if (!res.headersSent && !res.writableEnded && !res.destroyed) json(res, 500, { error: 'Internal Server Error' });
-        else if (!res.destroyed) res.destroy(e);
+        if (!res.headersSent) json(res, 500, { error: 'Internal Server Error' });
+        else res.destroy();
     }
 });
 
-server.on('clientError', (err, socket) => {
-    if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-});
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.requestTimeout = SERVER_REQUEST_TIMEOUT_MS;
 
 async function start() {
     await initDB();
     server.listen(PORT, HOST, () => {
-        console.log(`Gelbooru Prompt running at http://${HOST}:${PORT}`);
+        console.log('[Gelbooru Prompt] сервер запущен');
+        console.log(`Сайт: http://localhost:${PORT}`);
+        console.log(`База данных: ${DB_FILE}`);
     });
 }
 
-let shuttingDown = false;
-async function shutdown() {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    try { await historyWriteQueue; } catch {}
-    await new Promise(resolve => server.close(resolve));
-    await new Promise(resolve => db.close(() => resolve()));
-}
-
-process.on('SIGINT', () => shutdown().finally(() => process.exit(0)));
-process.on('SIGTERM', () => shutdown().finally(() => process.exit(0)));
-
 start().catch(err => {
-    console.error('Ошибка запуска:', err);
+    console.error('Не удалось запустить приложение:', err);
     process.exit(1);
 });
+
+process.on('SIGINT', () => server.close(() => db.close(() => process.exit(0))));
+process.on('SIGTERM', () => server.close(() => db.close(() => process.exit(0))));
