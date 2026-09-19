@@ -1,12 +1,7 @@
+```
+# Dependencies
 node_modules/
-data/
-*.sqlite
-*.sqlite3
-*.sqlite-shm
-*.sqlite-wal
-.env
-.env.*
-!.env.example
-npm-debug.log*
-.DS_Store
-Thumbs.db
+
+# Package lock file (if not needed in version control)
+package-lock.json
+```
