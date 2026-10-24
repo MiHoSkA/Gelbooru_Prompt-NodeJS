@@ -1267,7 +1267,11 @@
     let currentLocale = LOCALE.ru;
     let saveTimeout = null;
     const AUTH_STORAGE_KEY = 'adminPassword';
-    let adminPassword = localStorage.getItem(AUTH_STORAGE_KEY) || null;
+    let adminPassword = null;
+    try {
+        adminPassword = sessionStorage.getItem(AUTH_STORAGE_KEY) || null;
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (e) {}
     let isAuthorized = false;
     let isReady = false;
     let pendingAfterAuth = null;
@@ -1351,9 +1355,14 @@
     let currentHistoryPostId = null;
     let isLoading = false;
 
-    function isVideo(url) {
-        const ext = url.split('?')[0].split('.').pop().toLowerCase();
-        return ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'avi'].includes(ext);
+    function isVideo(inputUrl) {
+        try {
+            const pathname = new URL(inputUrl, window.location.href).pathname;
+            const ext = pathname.split('.').pop().toLowerCase();
+            return ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v', 'avi'].includes(ext);
+        } catch (e) {
+            return false;
+        }
     }
 
     function setPlaceholder(container, text) {
@@ -1655,6 +1664,12 @@
                     method: 'DELETE',
                     headers: getAuthHeaders()
                 });
+                if (resp.status === 403) {
+                    clearAdminSession();
+                    pendingAfterAuth = () => deleteHistoryPost(postId);
+                    showPasswordModal();
+                    return;
+                }
                 const data = await resp.json();
                 if (data.success) {
                     historyDetailModal.classList.remove('active');
@@ -1685,6 +1700,12 @@
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
+            if (resp.status === 403) {
+                clearAdminSession();
+                pendingAfterAuth = clearHistory;
+                showPasswordModal();
+                return;
+            }
             const data = await resp.json();
             if (data.success) {
                 localStorage.removeItem('history_page');
@@ -2059,6 +2080,13 @@
         saveCachedPost({ tags: tagsStr, imageUrl: imageUrl, postUrl: postUrl, id: id });
     }
 
+    function clearAdminSession() {
+        isAuthorized = false;
+        adminPassword = null;
+        try { sessionStorage.removeItem(AUTH_STORAGE_KEY); } catch (e) {}
+        try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (e) {}
+    }
+
     function getAuthHeaders() {
         const headers = {};
         if (adminPassword) headers['X-Admin-Password'] = adminPassword;
@@ -2098,6 +2126,9 @@
                 body: JSON.stringify(newConfig)
             });
             if (resp.status === 403) {
+                clearAdminSession();
+                pendingAfterAuth = saveConfig;
+                showPasswordModal();
                 throw new Error('Forbidden');
             }
             if (!resp.ok) throw new Error('Save failed');
@@ -2121,8 +2152,9 @@
 
     async function loadConfig(requireAuth = false) {
         try {
+            if (requireAuth && !adminPassword) throw new Error('Forbidden');
             const headers = {};
-            if (requireAuth && adminPassword) {
+            if (requireAuth) {
                 headers['X-Admin-Password'] = adminPassword;
             }
             const resp = await fetch('/api/config', { headers });
@@ -2151,9 +2183,7 @@
             return true;
         } catch (e) {
             if (e.message === 'Forbidden') {
-                isAuthorized = false;
-                adminPassword = null;
-                try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (ignore) {}
+                clearAdminSession();
             }
             settingsStatus.textContent = e.message === 'Forbidden'
                 ? currentLocale.settingsLoadError + ' (неверный пароль)'
@@ -2350,10 +2380,14 @@
                 return;
             }
             adminPassword = pwd;
-            localStorage.setItem(AUTH_STORAGE_KEY, pwd);
+            try { sessionStorage.setItem(AUTH_STORAGE_KEY, pwd); } catch (e) {}
             isAuthorized = true;
+            const loaded = await loadConfig(true);
+            if (!loaded) {
+                passwordError.textContent = currentLocale.passwordError;
+                return;
+            }
             hidePasswordModal();
-            await loadConfig(true);
 
             if (pendingAfterAuth) {
                 const cb = pendingAfterAuth;

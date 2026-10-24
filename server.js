@@ -6,18 +6,19 @@ const fs = require('fs');
 const url = require('url');
 const querystring = require('querystring');
 const path = require('path');
+const crypto = require('crypto');
 const sqlite3 = require('sqlite3').verbose();
 const sharp = require('sharp');
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
 const PUBLIC_DIR = path.resolve(process.env.PUBLIC_DIR || 'public');
 const DB_FILE = path.join(DATA_DIR, 'database.sqlite');
 const FAVICON_FILE = path.join(DATA_DIR, 'favicon.png');
 const INDEX_FILE = path.join(PUBLIC_DIR, 'index.html');
 
-const ADMIN_PASSWORD = '0000';
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '5682');
 
 const DEFAULT_CONFIG = Object.freeze({
     api_key: '',
@@ -71,6 +72,7 @@ const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
 let configCache = { ...DEFAULT_CONFIG };
 let seenIds = new Set();
 let historyWriteQueue = Promise.resolve();
+let configWriteQueue = Promise.resolve();
 const proxyAgents = new Map();
 const upstreamAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: UPSTREAM_TIMEOUT_MS });
 
@@ -99,7 +101,12 @@ function text(res, status, body, contentType = 'text/plain; charset=utf-8') {
 }
 
 function checkPassword(req) {
-    return req.headers['x-admin-password'] === ADMIN_PASSWORD;
+    const provided = req.headers['x-admin-password'];
+    if (typeof provided !== 'string') return false;
+    const expectedBuffer = Buffer.from(ADMIN_PASSWORD, 'utf8');
+    const providedBuffer = Buffer.from(provided, 'utf8');
+    return expectedBuffer.length === providedBuffer.length
+        && crypto.timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
 function publicConfig(config) {
@@ -116,8 +123,11 @@ function sanitizeConfig(input) {
     for (const key of CONFIG_KEYS) {
         if (!(key in input)) continue;
         const value = input[key];
-        if (typeof DEFAULT_CONFIG[key] === 'boolean') result[key] = Boolean(value);
-        else result[key] = String(value ?? '');
+        if (typeof DEFAULT_CONFIG[key] === 'boolean') {
+            if (typeof value === 'boolean') result[key] = value;
+            else if (value === 1 || value === '1' || value === 'true') result[key] = true;
+            else if (value === 0 || value === '0' || value === 'false') result[key] = false;
+        } else result[key] = String(value ?? '');
     }
     return result;
 }
@@ -194,8 +204,13 @@ async function initDB() {
     }
 }
 
-async function saveConfig(config) {
-    const safe = sanitizeConfig(config);
+function enqueueConfigWrite(task) {
+    const run = configWriteQueue.then(task, task);
+    configWriteQueue = run.catch(() => {});
+    return run;
+}
+
+async function persistConfig(safe) {
     await dbRun('BEGIN IMMEDIATE TRANSACTION');
     try {
         for (const [key, value] of Object.entries(safe)) {
@@ -210,9 +225,16 @@ async function saveConfig(config) {
     }
 }
 
-function normalizeTags(value) {
-    if (!value) return [];
-    return String(value).trim().split(/\s+/).filter(Boolean);
+function saveConfig(config) {
+    const safe = sanitizeConfig(config);
+    return enqueueConfigWrite(() => persistConfig(safe));
+}
+
+function patchConfig(patch) {
+    return enqueueConfigWrite(() => {
+        const safe = sanitizeConfig({ ...configCache, ...patch });
+        return persistConfig(safe);
+    });
 }
 
 function buildGelbooruUrl(endpoint, params) {
@@ -390,6 +412,11 @@ function requestRemote(inputUrl, proxyUrl, {
 }
 
 
+function normalizeRangeHeader(value) {
+    const range = String(value || '').trim();
+    return /^bytes=\d*-\d*$/.test(range) ? range : '';
+}
+
 function streamRemote(inputUrl, proxyUrl, res, {
     maxBytes = MAX_MEDIA_BYTES,
     redirects = 0,
@@ -486,6 +513,7 @@ function streamRemote(inputUrl, proxyUrl, res, {
                     finished = true;
                     remote.destroy(new Error('Удалённый ответ слишком большой'));
                     if (!res.destroyed) res.destroy();
+                    resolve();
                 }
             });
 
@@ -687,7 +715,12 @@ async function handleApi(req, res, parsedUrl) {
     const route = parsedUrl.pathname;
 
     if (route === '/api/config' && req.method === 'GET') {
-        json(res, 200, checkPassword(req) ? configCache : publicConfig(configCache));
+        const suppliedPassword = req.headers['x-admin-password'];
+        if (suppliedPassword !== undefined && !checkPassword(req)) {
+            json(res, 403, { error: 'Forbidden' });
+            return true;
+        }
+        json(res, 200, suppliedPassword !== undefined ? configCache : publicConfig(configCache));
         return true;
     }
 
@@ -709,10 +742,10 @@ async function handleApi(req, res, parsedUrl) {
     if (route === '/api/tags' && req.method === 'POST') {
         try {
             const body = await readJsonBody(req);
-            const next = { ...configCache };
-            if (body.include_tags !== undefined) next.include_tags = String(body.include_tags ?? '');
-            if (body.exclude_tags !== undefined) next.exclude_tags = String(body.exclude_tags ?? '');
-            await saveConfig(next);
+            const patch = {};
+            if (body.include_tags !== undefined) patch.include_tags = String(body.include_tags ?? '');
+            if (body.exclude_tags !== undefined) patch.exclude_tags = String(body.exclude_tags ?? '');
+            await patchConfig(patch);
             json(res, 200, { success: true });
         } catch (e) {
             json(res, e.message === 'Invalid JSON' ? 400 : 500, { error: e.message });
@@ -885,7 +918,7 @@ async function handleApi(req, res, parsedUrl) {
             await streamRemote(parsed.toString(), proxyUrl, res, {
                 maxBytes: MAX_MEDIA_BYTES,
                 requestHeaders: {
-                    range: req.headers.range || ''
+                    range: normalizeRangeHeader(req.headers.range)
                 }
             });
         } catch (e) {
@@ -905,6 +938,9 @@ async function handleApi(req, res, parsedUrl) {
 const server = http.createServer(async (req, res) => {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'");
 
     try {
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
