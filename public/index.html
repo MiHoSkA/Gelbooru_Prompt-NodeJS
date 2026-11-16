@@ -1354,6 +1354,12 @@
     let modalMedia = null;
     let currentHistoryPostId = null;
     let isLoading = false;
+    let randomRequestId = 0;
+    let randomAbortController = null;
+    let manualPostRequestId = 0;
+    let manualPostAbortController = null;
+    let historyDetailRequestId = 0;
+    let historyDetailAbortController = null;
 
     function isVideo(inputUrl) {
         try {
@@ -1382,10 +1388,16 @@
         document.querySelector('label[for="excludeTags"]').textContent = loc.excludeLabel;
         includeTags.placeholder = loc.includePlaceholder;
         excludeTags.placeholder = loc.excludePlaceholder;
-        randomBtn.textContent = loc.randomBtn;
+        randomBtn.textContent = isLoading ? loc.loadingBtn : loc.randomBtn;
         clearBtn.textContent = loc.clearBtn;
         loadPostBtn.textContent = loc.loadBtn;
         postIdInput.placeholder = loc.postIdPlaceholder;
+        if ([LOCALE.ru.tagsPlaceholder, LOCALE.en.tagsPlaceholder].includes(tagsDisplay.textContent)) {
+            tagsDisplay.textContent = loc.tagsPlaceholder;
+        }
+        if (['Теги', LOCALE.ru.tagsPlaceholder, LOCALE.en.tagsPlaceholder].includes(manualTagsDisplay.textContent)) {
+            manualTagsDisplay.textContent = loc.tagsPlaceholder;
+        }
         if (!previewContainer.querySelector('img') && !previewContainer.querySelector('video') && !previewContainer.querySelector('.spinner')) {
             setPlaceholder(previewContainer, loc.previewPlaceholder);
         }
@@ -1523,7 +1535,7 @@
             card.dataset.postId = String(item.post_id);
 
             const img = document.createElement('img');
-            img.src = '/api/history/image?id=' + encodeURIComponent(item.post_id);
+            img.src = '/api/history/image?id=' + encodeURIComponent(item.post_id) + '&v=2';
             img.alt = 'preview';
             img.loading = 'lazy';
             img.decoding = 'async';
@@ -1561,11 +1573,25 @@
         if (item) openHistoryDetail(item.dataset.postId);
     });
 
+    function closeHistoryDetailModal() {
+        historyDetailRequestId++;
+        if (historyDetailAbortController) historyDetailAbortController.abort();
+        historyDetailAbortController = null;
+        historyDetailModal.classList.remove('active');
+        updateBodyModalLock();
+    }
+
     async function openHistoryDetail(postId) {
+        const requestId = ++historyDetailRequestId;
+        if (historyDetailAbortController) historyDetailAbortController.abort();
+        const controller = new AbortController();
+        historyDetailAbortController = controller;
         try {
-            const resp = await fetch('/api/history/post?id=' + encodeURIComponent(postId));
+            const resp = await fetch('/api/history/post?id=' + encodeURIComponent(postId), { signal: controller.signal });
+            if (requestId !== historyDetailRequestId) return;
             if (!resp.ok) throw new Error('Post not found');
             const post = await resp.json();
+            if (requestId !== historyDetailRequestId) return;
             currentHistoryPostId = post.post_id;
             historyDetailImage.textContent = '';
             if (post.image_data) {
@@ -1611,8 +1637,11 @@
             historyDetailModal.classList.add('active');
             updateBodyModalLock();
         } catch (e) {
+            if (requestId !== historyDetailRequestId || e.name === 'AbortError') return;
             console.error('Ошибка загрузки деталей поста:', e);
             alert(currentLocale.loadPostError);
+        } finally {
+            if (requestId === historyDetailRequestId) historyDetailAbortController = null;
         }
     }
 
@@ -1672,8 +1701,7 @@
                 }
                 const data = await resp.json();
                 if (data.success) {
-                    historyDetailModal.classList.remove('active');
-                    updateBodyModalLock();
+                    closeHistoryDetailModal();
                     loadHistory();
                     updateSeenCount();
                 } else {
@@ -1687,10 +1715,7 @@
     }
 
     historyDetailModal.addEventListener('click', (e) => {
-        if (e.target === historyDetailModal) {
-            historyDetailModal.classList.remove('active');
-            updateBodyModalLock();
-        }
+        if (e.target === historyDetailModal) closeHistoryDetailModal();
     });
 
     async function clearHistory() {
@@ -1709,6 +1734,8 @@
             const data = await resp.json();
             if (data.success) {
                 localStorage.removeItem('history_page');
+                clearRandomResult();
+                closeHistoryDetailModal();
                 loadHistory();
                 updateSeenCount();
                 clearSeenStatus.textContent = currentLocale.historyCleared;
@@ -1941,10 +1968,7 @@
             closeImageModal();
             return;
         }
-        if (historyDetailModal.classList.contains('active')) {
-            historyDetailModal.classList.remove('active');
-            updateBodyModalLock();
-        }
+        if (historyDetailModal.classList.contains('active')) closeHistoryDetailModal();
     });
 
     function setupMediaClick(container) {
@@ -2030,9 +2054,13 @@
     }
 
     function copyTags(text, buttonElement) {
-        if (!text || text === currentLocale.tagsPlaceholder) {
-            statusMsg.textContent = '❌ ' + currentLocale.noTagsToCopy;
-            setTimeout(() => statusMsg.textContent = '', 2000);
+        const statusElement = buttonElement === copyManualTagsBtn ? manualStatusMsg : statusMsg;
+        if (!text || ['Теги', LOCALE.ru.tagsPlaceholder, LOCALE.en.tagsPlaceholder].includes(text)) {
+            const message = '❌ ' + currentLocale.noTagsToCopy;
+            statusElement.textContent = message;
+            setTimeout(() => {
+                if (statusElement.textContent === message) statusElement.textContent = '';
+            }, 2000);
             return;
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2059,7 +2087,8 @@
                 setTimeout(() => buttonElement.textContent = currentLocale.copyBtn, 5000);
             }
         } catch (e) {
-            statusMsg.textContent = '❌ ' + currentLocale.noTagsToCopy;
+            const statusElement = buttonElement === copyManualTagsBtn ? manualStatusMsg : statusMsg;
+            statusElement.textContent = '❌ ' + currentLocale.noTagsToCopy;
         }
         document.body.removeChild(textarea);
     }
@@ -2216,8 +2245,27 @@
         }
     }
 
+    function clearRandomResult() {
+        randomRequestId++;
+        if (randomAbortController) randomAbortController.abort();
+        randomAbortController = null;
+        isLoading = false;
+        randomBtn.disabled = false;
+        randomBtn.textContent = currentLocale.randomBtn;
+        tagsDisplay.textContent = currentLocale.tagsPlaceholder;
+        urlDisplay.textContent = '';
+        urlDisplay.style.cursor = 'default';
+        urlDisplay.onclick = null;
+        displayPreview(previewContainer, null);
+        statusMsg.textContent = '';
+        clearCachedPost();
+    }
+
     async function fetchRandomPost(include, exclude) {
         if (isLoading) return;
+        const requestId = ++randomRequestId;
+        const controller = new AbortController();
+        randomAbortController = controller;
         isLoading = true;
         randomBtn.disabled = true;
         randomBtn.textContent = currentLocale.loadingBtn;
@@ -2228,8 +2276,10 @@
             const resp = await fetch('/api/random', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ include, exclude })
+                body: JSON.stringify({ include, exclude }),
+                signal: controller.signal
             });
+            if (requestId !== randomRequestId) return;
             if (!resp.ok) {
                 let errorMsg = currentLocale.statusError;
                 try {
@@ -2242,12 +2292,15 @@
                 throw new Error(errorMsg);
             }
             const xml = await resp.text();
+            if (requestId !== randomRequestId) return;
             const data = parseGelbooruXML(xml);
             if (!data || !data.id) {
                 statusMsg.textContent = currentLocale.statusNoPost;
                 statusMsg.style.color = '#ff6b6b';
                 tagsDisplay.textContent = currentLocale.tagsPlaceholder;
                 urlDisplay.textContent = '';
+                urlDisplay.style.cursor = 'default';
+                urlDisplay.onclick = null;
                 displayPreview(previewContainer, null);
                 clearCachedPost();
                 return;
@@ -2269,19 +2322,31 @@
             displayPostData(tagsStr, postUrl, data.file_url, data.id);
             updateSeenCount();
         } catch (e) {
+            if (requestId !== randomRequestId || e.name === 'AbortError') return;
             console.error(e);
+            tagsDisplay.textContent = currentLocale.tagsPlaceholder;
+            urlDisplay.textContent = '';
+            urlDisplay.style.cursor = 'default';
+            urlDisplay.onclick = null;
             statusMsg.textContent = currentLocale.statusError + ': ' + e.message;
             statusMsg.style.color = '#ff6b6b';
             displayPreview(previewContainer, null);
             clearCachedPost();
         } finally {
-            isLoading = false;
-            randomBtn.disabled = false;
-            randomBtn.textContent = currentLocale.randomBtn;
+            if (requestId === randomRequestId) {
+                randomAbortController = null;
+                isLoading = false;
+                randomBtn.disabled = false;
+                randomBtn.textContent = currentLocale.randomBtn;
+            }
         }
     }
 
     async function fetchPostById(id) {
+        const requestId = ++manualPostRequestId;
+        if (manualPostAbortController) manualPostAbortController.abort();
+        const controller = new AbortController();
+        manualPostAbortController = controller;
         manualStatusMsg.textContent = currentLocale.statusLoading;
         manualStatusMsg.style.color = '#ffaa66';
         showSpinner(manualPreviewContainer);
@@ -2289,19 +2354,24 @@
             const resp = await fetch('/api/post', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id })
+                body: JSON.stringify({ id }),
+                signal: controller.signal
             });
+            if (requestId !== manualPostRequestId) return;
             if (!resp.ok) {
                 const errData = await resp.json();
                 throw new Error(errData.error || 'Server error');
             }
             const xml = await resp.text();
+            if (requestId !== manualPostRequestId) return;
             const data = parseGelbooruXML(xml);
             if (!data || !data.id) {
                 manualStatusMsg.textContent = currentLocale.statusNoPost;
                 manualStatusMsg.style.color = '#ff6b6b';
                 manualTagsDisplay.textContent = currentLocale.tagsPlaceholder;
                 manualUrlDisplay.textContent = '';
+                manualUrlDisplay.style.cursor = 'default';
+                manualUrlDisplay.onclick = null;
                 displayPreview(manualPreviewContainer, null);
                 return;
             }
@@ -2332,10 +2402,17 @@
             manualStatusMsg.textContent = currentLocale.statusSuccess;
             manualStatusMsg.style.color = '#51cf66';
         } catch (e) {
+            if (requestId !== manualPostRequestId || e.name === 'AbortError') return;
             console.error(e);
+            manualTagsDisplay.textContent = currentLocale.tagsPlaceholder;
+            manualUrlDisplay.textContent = '';
+            manualUrlDisplay.style.cursor = 'default';
+            manualUrlDisplay.onclick = null;
             manualStatusMsg.textContent = currentLocale.statusError + ': ' + e.message;
             manualStatusMsg.style.color = '#ff6b6b';
             displayPreview(manualPreviewContainer, null);
+        } finally {
+            if (requestId === manualPostRequestId) manualPostAbortController = null;
         }
     }
 
@@ -2433,13 +2510,7 @@
         fetchRandomPost(include, exclude);
     });
 
-    clearBtn.addEventListener('click', () => {
-        tagsDisplay.textContent = currentLocale.tagsPlaceholder;
-        urlDisplay.textContent = '';
-        displayPreview(previewContainer, null);
-        statusMsg.textContent = '';
-        clearCachedPost();
-    });
+    clearBtn.addEventListener('click', clearRandomResult);
 
     loadPostBtn.addEventListener('click', () => {
         const input = postIdInput.value.trim();

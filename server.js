@@ -12,8 +12,8 @@ const sharp = require('sharp');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
-const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
-const PUBLIC_DIR = path.resolve(process.env.PUBLIC_DIR || 'public');
+const DATA_DIR = path.resolve(__dirname, process.env.DATA_DIR || 'data');
+const PUBLIC_DIR = path.resolve(__dirname, process.env.PUBLIC_DIR || 'public');
 const DB_FILE = path.join(DATA_DIR, 'database.sqlite');
 const FAVICON_FILE = path.join(DATA_DIR, 'favicon.png');
 const INDEX_FILE = path.join(PUBLIC_DIR, 'index.html');
@@ -43,6 +43,10 @@ const MAX_IMAGE_BYTES = 60 * 1024 * 1024;
 const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
 const MAX_JSON_BODY_BYTES = 64 * 1024;
 const MAX_RANDOM_ATTEMPTS = 8;
+const RANDOM_FALLBACK_BATCH_SIZE = 100;
+const MAX_RANDOM_FALLBACK_PAGES = 5;
+const MAX_RANDOM_FALLBACK_RESULTS = 20000;
+const MAX_CONCURRENT_HISTORY_DOWNLOADS = 4;
 
 const HISTORY_PAGE_SIZE = 24;
 const SERVER_REQUEST_TIMEOUT_MS = 120000;
@@ -71,7 +75,11 @@ const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
 
 let configCache = { ...DEFAULT_CONFIG };
 let seenIds = new Set();
-let historyWriteQueue = Promise.resolve();
+const pendingHistorySaves = [];
+let activeHistorySaves = 0;
+let historyDbWriteQueue = Promise.resolve();
+let historyGeneration = 0;
+const historyPostVersions = new Map();
 let configWriteQueue = Promise.resolve();
 const proxyAgents = new Map();
 const upstreamAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: UPSTREAM_TIMEOUT_MS });
@@ -614,7 +622,7 @@ async function claimSeenId(id) {
     return false;
 }
 
-async function findRandomPost(includeTags, excludeTags, cfg) {
+async function findRandomPost(includeTags, excludeTags, cfg, generation = historyGeneration) {
     const tags = [];
     const addTags = (raw, negative) => {
         if (!raw || !String(raw).trim()) return;
@@ -631,15 +639,55 @@ async function findRandomPost(includeTags, excludeTags, cfg) {
     const proxyUrl = cfg.proxy_enabled ? cfg.proxy_url : null;
 
     // Match the reForge extension: let Gelbooru choose from the entire result set.
-    const randomTags = tags.filter(tag => !tag.startsWith('sort:'));
-    randomTags.push('sort:random');
+    const searchTags = tags.filter(tag => !tag.startsWith('sort:'));
+    const randomTags = [...searchTags, 'sort:random'];
     const postUrl = buildGelbooruUrl('post', { ...auth, limit: 1, pid: 0, tags: randomTags.join(' ') });
     for (let attempt = 0; attempt < MAX_RANDOM_ATTEMPTS; attempt++) {
         const result = await fetchWithRetry(postUrl, proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
+        if (generation !== historyGeneration) return null;
         const post = parsePostsFromXML(result.buffer.toString('utf8'))[0];
         if (!post) return null;
         if (!post.id) throw new Error('Gelbooru вернул пост без ID');
         if (!seenIds.has(String(post.id)) && await claimSeenId(post.id)) return post;
+    }
+
+    // If random requests repeatedly hit seen posts, sample different pages
+    // instead of assuming there are no unseen matches left.
+    const findUnseenInPage = async (xml) => {
+        const candidates = parsePostsFromXML(xml).filter(post => post.id && !seenIds.has(String(post.id)));
+        while (candidates.length) {
+            const index = crypto.randomInt(candidates.length);
+            const [post] = candidates.splice(index, 1);
+            if (await claimSeenId(post.id)) return post;
+        }
+        return null;
+    };
+    const fallbackParams = { ...auth, limit: RANDOM_FALLBACK_BATCH_SIZE, tags: searchTags.join(' ') };
+    const firstPageUrl = buildGelbooruUrl('post', { ...fallbackParams, pid: 0 });
+    const firstResult = await fetchWithRetry(firstPageUrl, proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
+    if (generation !== historyGeneration) return null;
+    const firstXml = firstResult.buffer.toString('utf8');
+    const firstUnseen = await findUnseenInPage(firstXml);
+    if (firstUnseen) return firstUnseen;
+
+    const total = parsePostCount(firstXml);
+    const pageCount = Math.min(
+        Math.ceil(total / RANDOM_FALLBACK_BATCH_SIZE),
+        Math.ceil(MAX_RANDOM_FALLBACK_RESULTS / RANDOM_FALLBACK_BATCH_SIZE)
+    );
+    const checkedPages = new Set([0]);
+    const extraAttempts = Math.min(MAX_RANDOM_FALLBACK_PAGES, pageCount - 1);
+    for (let attempt = 0; attempt < extraAttempts; attempt++) {
+        let page;
+        do {
+            page = crypto.randomInt(1, pageCount);
+        } while (checkedPages.has(page));
+        checkedPages.add(page);
+        const pageUrl = buildGelbooruUrl('post', { ...fallbackParams, pid: page });
+        const result = await fetchWithRetry(pageUrl, proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
+        if (generation !== historyGeneration) return null;
+        const unseen = await findUnseenInPage(result.buffer.toString('utf8'));
+        if (unseen) return unseen;
     }
     return null;
 }
@@ -655,8 +703,16 @@ function isVideoUrl(inputUrl) {
     return ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v', 'avi'].includes(getMediaExtension(inputUrl));
 }
 
-async function savePostToHistory(postId, tags, fileUrl, proxyUrl) {
-    if (!postId || !fileUrl) return;
+function enqueueHistoryDbWrite(task) {
+    const write = historyDbWriteQueue.then(task, task);
+    historyDbWriteQueue = write.catch(() => {});
+    return write;
+}
+
+async function savePostToHistory(postId, tags, fileUrl, proxyUrl, generation, postVersion) {
+    const isCurrent = () => generation === historyGeneration
+        && postVersion === (historyPostVersions.get(String(postId)) || 0);
+    if (!postId || !fileUrl || !isCurrent()) return;
     try {
         if (isVideoUrl(fileUrl)) return;
 
@@ -668,7 +724,7 @@ async function savePostToHistory(postId, tags, fileUrl, proxyUrl) {
             timeoutMs: MEDIA_TIMEOUT_MS
         });
 
-        if (!String(response.contentType || '').startsWith('image/')) return;
+        if (!isCurrent() || !String(response.contentType || '').startsWith('image/')) return;
 
         const compressed = await sharp(response.buffer, { failOn: 'none' })
             .rotate()
@@ -676,21 +732,44 @@ async function savePostToHistory(postId, tags, fileUrl, proxyUrl) {
             .jpeg({ quality: 68, progressive: true })
             .toBuffer();
 
-        await dbRun(
-            `INSERT INTO history(post_id, tags, file_url, image_data) VALUES(?, ?, ?, ?)
-             ON CONFLICT(post_id) DO UPDATE SET tags=excluded.tags, file_url=excluded.file_url, image_data=excluded.image_data`,
-            [String(postId), String(tags || ''), String(fileUrl), compressed]
-        );
+        if (!isCurrent()) return;
+        await enqueueHistoryDbWrite(() => {
+            if (!isCurrent()) return;
+            return dbRun(
+                `INSERT INTO history(post_id, tags, file_url, image_data) VALUES(?, ?, ?, ?)
+                 ON CONFLICT(post_id) DO UPDATE SET tags=excluded.tags, file_url=excluded.file_url, image_data=excluded.image_data`,
+                [String(postId), String(tags || ''), String(fileUrl), compressed]
+            );
+        });
     } catch (e) {
         console.warn('Не удалось сохранить пост в историю:', e.message);
     }
 }
 
+function startQueuedHistorySaves() {
+    while (activeHistorySaves < MAX_CONCURRENT_HISTORY_DOWNLOADS && pendingHistorySaves.length) {
+        const job = pendingHistorySaves.shift();
+        activeHistorySaves++;
+        Promise.resolve()
+            .then(() => savePostToHistory(job.postId, job.tags, job.fileUrl, job.proxyUrl, job.generation, job.postVersion))
+            .catch(e => console.warn('Ошибка очереди истории:', e.message))
+            .finally(() => {
+                activeHistorySaves--;
+                job.resolve();
+                startQueuedHistorySaves();
+            });
+    }
+}
+
 function queueHistorySave(postId, tags, fileUrl, proxyUrl) {
-    historyWriteQueue = historyWriteQueue
-        .then(() => savePostToHistory(postId, tags, fileUrl, proxyUrl))
-        .catch(() => {});
-    return historyWriteQueue;
+    return new Promise(resolve => {
+        pendingHistorySaves.push({
+            postId, tags, fileUrl, proxyUrl, resolve,
+            generation: historyGeneration,
+            postVersion: historyPostVersions.get(String(postId)) || 0
+        });
+        startQueuedHistorySaves();
+    });
 }
 
 async function getHistoryPage(page = 1, limit = HISTORY_PAGE_SIZE) {
@@ -718,12 +797,16 @@ async function getHistoryPost(postId) {
 }
 
 async function clearHistory() {
-    await dbRun('DELETE FROM history');
+    historyGeneration++;
+    historyPostVersions.clear();
+    await enqueueHistoryDbWrite(() => dbRun('DELETE FROM history'));
     return true;
 }
 
 async function deleteHistoryPost(postId) {
-    const result = await dbRun('DELETE FROM history WHERE post_id = ?', [String(postId)]);
+    const id = String(postId);
+    historyPostVersions.set(id, (historyPostVersions.get(id) || 0) + 1);
+    const result = await enqueueHistoryDbWrite(() => dbRun('DELETE FROM history WHERE post_id = ?', [id]));
     return result.changes > 0;
 }
 
@@ -863,7 +946,7 @@ async function handleApi(req, res, parsedUrl) {
             }
             res.writeHead(200, {
                 'Content-Type': 'image/jpeg',
-                'Cache-Control': 'public, max-age=31536000, immutable',
+                'Cache-Control': 'no-store',
                 'Content-Length': post.image_data.length,
                 'X-Content-Type-Options': 'nosniff'
             });
@@ -875,9 +958,14 @@ async function handleApi(req, res, parsedUrl) {
     }
 
     if (route === '/api/random' && req.method === 'POST') {
+        const requestGeneration = historyGeneration;
         try {
             const body = await readJsonBody(req);
-            const post = await findRandomPost(body.include, body.exclude, configCache);
+            const post = await findRandomPost(body.include, body.exclude, configCache, requestGeneration);
+            if (requestGeneration !== historyGeneration) {
+                json(res, 409, { error: 'Запрос отменён после очистки истории' });
+                return true;
+            }
             if (!post) {
                 json(res, 404, { error: 'Поиск не нашёл непросмотренный пост. Попробуйте ещё раз или измените теги.' });
                 return true;
@@ -903,8 +991,11 @@ async function handleApi(req, res, parsedUrl) {
     if (route === '/api/post' && req.method === 'POST') {
         try {
             const body = await readJsonBody(req);
-            const id = Number(body.id);
-            if (!Number.isInteger(id) || id <= 0) throw new Error('ID не указан или некорректен');
+            const id = Number(body?.id);
+            if (!Number.isInteger(id) || id <= 0) {
+                json(res, 400, { error: 'ID не указан или некорректен' });
+                return true;
+            }
             const params = { id };
             if (configCache.api_key) params.api_key = configCache.api_key;
             if (configCache.user_id) params.user_id = configCache.user_id;
