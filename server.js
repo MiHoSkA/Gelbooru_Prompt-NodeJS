@@ -42,8 +42,8 @@ const MAX_XML_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 60 * 1024 * 1024;
 const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
 const MAX_JSON_BODY_BYTES = 64 * 1024;
-const MAX_RANDOM_ATTEMPTS = 30;
-const RANDOM_MAX_OFFSET = 20000;
+const MAX_RANDOM_ATTEMPTS = 8;
+
 const HISTORY_PAGE_SIZE = 24;
 const SERVER_REQUEST_TIMEOUT_MS = 120000;
 
@@ -364,7 +364,13 @@ function requestRemote(inputUrl, proxyUrl, {
 
             if (status < 200 || status >= 300) {
                 remote.resume();
-                fail(new Error(`Удалённый сервер ответил с кодом ${status}`));
+                const error = new Error(`Удалённый сервер ответил с кодом ${status}`);
+                error.statusCode = status;
+                if (status === 429) {
+                    const value = remote.headers['retry-after'];
+                    error.retryAfter = Math.max(1, Math.ceil(Number(value) || (Date.parse(value) - Date.now()) / 1000) || 60);
+                }
+                fail(error);
                 return;
             }
 
@@ -472,7 +478,13 @@ function streamRemote(inputUrl, proxyUrl, res, {
 
             if (status < 200 || status >= 300) {
                 remote.resume();
-                fail(new Error(`Удалённый сервер ответил с кодом ${status}`));
+                const error = new Error(`Удалённый сервер ответил с кодом ${status}`);
+                error.statusCode = status;
+                if (status === 429) {
+                    const value = remote.headers['retry-after'];
+                    error.retryAfter = Math.max(1, Math.ceil(Number(value) || (Date.parse(value) - Date.now()) / 1000) || 60);
+                }
+                fail(error);
                 return;
             }
 
@@ -550,6 +562,8 @@ function streamRemote(inputUrl, proxyUrl, res, {
 }
 
 
+let upstreamRateLimitUntil = 0;
+
 async function fetchWithRetry(inputUrl, proxyUrl, {
     asBuffer = false,
     retries = 3,
@@ -558,6 +572,12 @@ async function fetchWithRetry(inputUrl, proxyUrl, {
     timeoutMs = UPSTREAM_TIMEOUT_MS,
     range = null
 } = {}) {
+    if (Date.now() < upstreamRateLimitUntil) {
+        const error = new Error('Gelbooru временно ограничил частоту запросов. Повторите попытку позже.');
+        error.statusCode = 429;
+        error.retryAfter = Math.ceil((upstreamRateLimitUntil - Date.now()) / 1000);
+        throw error;
+    }
     let lastError;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -569,6 +589,11 @@ async function fetchWithRetry(inputUrl, proxyUrl, {
             });
         } catch (e) {
             lastError = e;
+            if (e.statusCode === 429) {
+                upstreamRateLimitUntil = Date.now() + (e.retryAfter || 60) * 1000;
+                e.message = 'Gelbooru временно ограничил частоту запросов. Повторите попытку позже.';
+                throw e;
+            }
             if (attempt < retries) {
                 await new Promise(resolve => setTimeout(resolve, delay * attempt));
             }
@@ -600,33 +625,24 @@ async function findRandomPost(includeTags, excludeTags, cfg) {
     };
     addTags(includeTags, false);
     addTags(excludeTags, true);
-    const tagStr = tags.join(' ');
     const auth = {};
     if (cfg.api_key) auth.api_key = cfg.api_key;
     if (cfg.user_id) auth.user_id = cfg.user_id;
     const proxyUrl = cfg.proxy_enabled ? cfg.proxy_url : null;
 
-    const countUrl = buildGelbooruUrl('post', { ...auth, limit: 1, pid: 0, ...(tagStr ? { tags: tagStr } : {}) });
-    const countXml = await fetchWithRetry(countUrl, proxyUrl, { retries: 4, delay: 400, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
-    const count = parsePostCount(countXml.buffer.toString('utf8'));
-    if (count <= 0) return null;
-
-    const maxOffset = Math.min(count - 1, RANDOM_MAX_OFFSET);
+    // Match the reForge extension: let Gelbooru choose from the entire result set.
+    const randomTags = tags.filter(tag => !tag.startsWith('sort:'));
+    randomTags.push('sort:random');
+    const postUrl = buildGelbooruUrl('post', { ...auth, limit: 1, pid: 0, tags: randomTags.join(' ') });
     for (let attempt = 0; attempt < MAX_RANDOM_ATTEMPTS; attempt++) {
-        const pid = Math.floor(Math.random() * (maxOffset + 1));
-        const postUrl = buildGelbooruUrl('post', { ...auth, limit: 1, pid, ...(tagStr ? { tags: tagStr } : {}) });
-        try {
-            const result = await fetchWithRetry(postUrl, proxyUrl, { retries: 3, delay: 350, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
-            const post = parsePostsFromXML(result.buffer.toString('utf8'))[0];
-            if (!post?.id) continue;
-            if (!seenIds.has(String(post.id)) && await claimSeenId(post.id)) return post;
-        } catch (e) {
-            console.warn('Ошибка запроса случайного поста:', e.message);
-        }
+        const result = await fetchWithRetry(postUrl, proxyUrl, { retries: 3, delay: 500, maxBytes: MAX_XML_BYTES, timeoutMs: UPSTREAM_TIMEOUT_MS });
+        const post = parsePostsFromXML(result.buffer.toString('utf8'))[0];
+        if (!post) return null;
+        if (!post.id) throw new Error('Gelbooru вернул пост без ID');
+        if (!seenIds.has(String(post.id)) && await claimSeenId(post.id)) return post;
     }
     return null;
 }
-
 function getMediaExtension(inputUrl) {
     try {
         return path.extname(new url.URL(inputUrl).pathname).replace('.', '').toLowerCase();
@@ -863,7 +879,7 @@ async function handleApi(req, res, parsedUrl) {
             const body = await readJsonBody(req);
             const post = await findRandomPost(body.include, body.exclude, configCache);
             if (!post) {
-                json(res, 404, { error: 'Все доступные посты уже просмотрены' });
+                json(res, 404, { error: 'Поиск не нашёл непросмотренный пост. Попробуйте ещё раз или измените теги.' });
                 return true;
             }
             const proxyUrl = configCache.proxy_enabled ? configCache.proxy_url : null;
@@ -873,12 +889,13 @@ async function handleApi(req, res, parsedUrl) {
             text(res, 200, xml, 'application/xml; charset=utf-8');
         } catch (e) {
             const message = e?.message || 'Ошибка удалённого сервера';
-            if (/Таймаут|Удалённый сервер/i.test(message)) {
+            if (e.statusCode === 429 || /Таймаут|Удалённый сервер/i.test(message)) {
                 console.warn('Не удалось получить случайный пост:', message);
             } else {
                 console.error('Ошибка в /api/random:', message);
             }
-            json(res, 502, { error: message });
+            if (e.statusCode === 429) res.setHeader('Retry-After', String(e.retryAfter || 60));
+            json(res, e.statusCode === 429 ? 429 : 502, { error: message });
         }
         return true;
     }
